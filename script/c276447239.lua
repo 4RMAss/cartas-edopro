@@ -38,28 +38,8 @@ function s.initial_effect(c)
 	e3:SetTargetRange(LOCATION_MZONE,0)
 	e3:SetValue(500)
 	c:RegisterEffect(e3)
-	--once per turn: move a monster MZONE<->SZONE (bidireccional)
-	local e4=Effect.CreateEffect(c)
-	e4:SetDescription(aux.Stringid(id,0))
-	e4:SetType(EFFECT_TYPE_IGNITION)
-	e4:SetProperty(EFFECT_FLAG_CARD_TARGET)
-	e4:SetRange(LOCATION_SZONE)
-	e4:SetCountLimit(1,id)
-	e4:SetCondition(s.movecon)
-	e4:SetTarget(s.movetg)
-	e4:SetOperation(s.moveop)
-	c:RegisterEffect(e4)
-	--when a monster you control is destroyed and you have none: resummon the moved ones
-	local e5=Effect.CreateEffect(c)
-	e5:SetDescription(aux.Stringid(id,1))
-	e5:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
-	e5:SetCode(EVENT_DESTROYED)
-	e5:SetRange(LOCATION_SZONE)
-	e5:SetProperty(EFFECT_FLAG_DELAY)
-	e5:SetCountLimit(1,id+1)
-	e5:SetCondition(s.rescon)
-	e5:SetOperation(s.resop)
-	c:RegisterEffect(e5)
+	--mover monstruos entre la Zona de Monstruos y la de Magia/Trampa, y el rescate
+	s.addmove(c)
 	--registro global: Critias y Hermos no guardan sus materiales en la carta que crean,
 	--así que se apunta aquí qué cartas mandaron al Cementerio para crearla
 	aux.GlobalCheck(s,function()
@@ -73,9 +53,56 @@ function s.initial_effect(c)
 		ge2:SetCode(EVENT_CHAIN_SOLVED)
 		ge2:SetOperation(s.mapop)
 		Duel.RegisterEffect(ge2,0)
+		local ge3=Effect.GlobalEffect()
+		ge3:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
+		ge3:SetCode(EVENT_ADJUST)
+		ge3:SetOperation(s.grantop)
+		Duel.RegisterEffect(ge3,0)
 	end)
 end
 s.listed_names={CARD_CRITIAS,CARD_TIMAEUS,CARD_HERMOS}
+--efectos de mover monstruos MZONE<->SZONE y de rescate; también se le dan a
+--"Orichalcos Deuteros" y "Orichalcos Tritos" mientras estén boca arriba en la Zona de Campo
+function s.addmove(c,reset)
+	--once per turn: move a monster MZONE<->SZONE (bidireccional)
+	local e4=Effect.CreateEffect(c)
+	e4:SetDescription(aux.Stringid(id,0))
+	e4:SetType(EFFECT_TYPE_IGNITION)
+	e4:SetProperty(EFFECT_FLAG_CARD_TARGET)
+	e4:SetRange(LOCATION_SZONE)
+	e4:SetCountLimit(1,id)
+	e4:SetCondition(s.movecon)
+	e4:SetTarget(s.movetg)
+	e4:SetOperation(s.moveop)
+	if reset then e4:SetReset(reset) end
+	c:RegisterEffect(e4)
+	--when a monster you control is destroyed and you have none: resummon the moved ones
+	local e5=Effect.CreateEffect(c)
+	e5:SetDescription(aux.Stringid(id,1))
+	e5:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
+	e5:SetCode(EVENT_DESTROYED)
+	e5:SetRange(LOCATION_SZONE)
+	e5:SetProperty(EFFECT_FLAG_DELAY)
+	e5:SetCountLimit(1,id+1)
+	e5:SetCondition(s.rescon)
+	e5:SetOperation(s.resop)
+	if reset then e5:SetReset(reset) end
+	c:RegisterEffect(e5)
+end
+--"Orichalcos Deuteros" y "Orichalcos Tritos" copian el script del Sello oficial, que no
+--tiene estos efectos; aquí se les añaden cuando están boca arriba en la Zona de Campo
+local CARD_DEUTEROS,CARD_TRITOS=110000100,110000101
+local FLAG_GRANTED=id+200
+function s.upfilter(c)
+	return c:IsFaceup() and c:IsCode(CARD_DEUTEROS,CARD_TRITOS) and c:GetFlagEffect(FLAG_GRANTED)==0
+end
+function s.grantop(e,tp,eg,ep,ev,re,r,rp)
+	local g=Duel.GetMatchingGroup(s.upfilter,0,LOCATION_FZONE,LOCATION_FZONE,nil)
+	for tc in g:Iter() do
+		tc:RegisterFlagEffect(FLAG_GRANTED,RESET_EVENT|RESETS_STANDARD,0,1)
+		s.addmove(tc,RESET_EVENT|RESETS_STANDARD)
+	end
+end
 function s.isdragon(c)
 	return c:IsCode(CARD_CRITIAS,CARD_TIMAEUS,CARD_HERMOS)
 end
