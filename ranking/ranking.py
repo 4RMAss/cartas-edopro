@@ -46,12 +46,13 @@ TOURN = os.path.join(DATA_DIR, "torneos.json")
 NERFS = os.path.join(DATA_DIR, "nerfeos.json")
 SALON = os.path.join(DATA_DIR, "salon_fama.json")
 ALIASES = os.path.join(DATA_DIR, "jugadores.json")
+CARDS = os.path.join(DATA_DIR, "cartas.json")
 # las demás direcciones salen de la de personajes.json (misma carpeta "ranking" del repositorio)
 URL_BASE = CHARS_URL[:-len("personajes.json")] if CHARS_URL.endswith("personajes.json") else ""
 SELF_PATH = os.path.abspath(__file__)
 UPDATE_MARK = SELF_PATH + ".actualizado"
 REJECTED = SELF_PATH + ".rechazada"  # huella de una versión que falló al arrancar (no se reinstala)
-VERSION = "3.3"
+VERSION = "3.4"
 TZ = timezone(timedelta(hours=int(os.environ.get("RANKING_TZ_HOURS", "-5"))))  # Lima
 KEEP_DAYS = int(os.environ.get("RANKING_KEEP_DAYS", "90"))
 MIN_PCT = int(os.environ.get("RANKING_MIN_PCT", "40"))  # parecido mínimo para asignar personaje
@@ -239,6 +240,15 @@ def updater():
             files += [(URL_BASE + "tiers.json", TIERS), (URL_BASE + "torneos.json", TOURN),
                       (URL_BASE + "nerfeos.json", NERFS), (URL_BASE + "salon_fama.json", SALON),
                       (URL_BASE + "jugadores.json", ALIASES)]
+        if URL_BASE:
+            try:  # la lista de nombres de cartas es grande: se baja como mucho una vez al día
+                if not os.path.exists(CARDS) or time.time() - os.path.getmtime(CARDS) > 86400:
+                    data = fetch(URL_BASE + "cartas.json")
+                    json.loads(data)
+                    if not save_if_changed(CARDS, data):
+                        os.utime(CARDS)
+            except Exception as exc:
+                print("No se pudo actualizar cartas.json:", exc, flush=True)
         for url, path in files:
             if not url:
                 continue
@@ -346,6 +356,8 @@ def init_db():
             if col not in cols:
                 con.execute(f"alter table duels add column {col} text default '[]'")
         con.execute("create table if not exists bad(file text primary key, error text)")
+        con.execute("create table if not exists signups(tid text, key text, name text, ts integer, "
+                    "primary key(tid, key))")
 
 
 def scan_once():
@@ -403,6 +415,7 @@ def load_duels(limit=None):
         decks = [json.loads(d.get("decks0") or "[]"), json.loads(d.get("decks1") or "[]")]
         d["chars"] = [[CHAR.detect(decks[t][i]) if i < len(decks[t]) else (None, 0)
                        for i in range(len(d["team" + str(t)]))] for t in (0, 1)]
+        d["decks"] = decks
         d["nerf"] = [[NERF.check(d["chars"][t][i][0], decks[t][i] if i < len(decks[t]) else [])
                       for i in range(len(d["team" + str(t)]))] for t in (0, 1)]
         d["final"] = d["corrected"] if d["corrected"] is not None else d["winner"]
@@ -457,6 +470,14 @@ def slug(text):
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-") or "torneo"
 
 
+def load_signups(tid):
+    try:
+        with db_lock, db() as con:
+            return [r[0] for r in con.execute("select name from signups where tid=? order by ts", (tid,))]
+    except Exception:
+        return []
+
+
 def split_team(entry):
     """«Sky&Syrus» o «Kaiser & Coco» -> ['Sky', 'Syrus']."""
     return [p.strip() for p in re.split(r"\s*&\s*", str(entry)) if p.strip()]
@@ -479,9 +500,14 @@ def tournaments_info():
                 members_of[disp] = members
                 return disp
 
+            open_ = bool(t.get("inscripcion"))
+            tid = slug(str(t.get("nombre") or "Torneo")) + "-" + str(t["inicio"])
+            signups = load_signups(tid) if open_ else []
             seeds = [u for u in (unit(p) for p in t.get("participantes") or []) if u]
             groups = {str(g): [u for u in (unit(p) for p in members) if u]
                       for g, members in (t.get("grupos") or {}).items()}
+            if open_ and not seeds and not groups:  # sin lista fija: juegan los inscritos
+                seeds = [u for u in (unit(p) for p in signups) if u]
             units = seeds + [u for members in groups.values() for u in members if u not in seeds]
             fmt = norm_format(t.get("formato"))
             ko = t.get("inicio_eliminacion")
@@ -489,7 +515,7 @@ def tournaments_info():
             label = str(t.get("tipo") or FORMAT_LABELS[fmt])
             out.append({
                 "name": name,
-                "id": slug(name) + "-" + str(t["inicio"]),
+                "id": tid,
                 "start": parse_day(t["inicio"]),
                 "end": parse_day(t.get("fin") or t["inicio"], end=True),
                 "start_txt": t["inicio"], "end_txt": t.get("fin") or t["inicio"],
@@ -507,6 +533,8 @@ def tournaments_info():
                 "format": fmt,
                 "label": label,
                 "category": str(t.get("categoria") or "").strip() or label,
+                "open": open_,
+                "signups": signups,
                 "bo": max(1, int(t.get("al_mejor_de") or 1)),
             })
         except Exception as exc:
@@ -872,6 +900,14 @@ border-radius:10px;padding:10px;text-align:center;font-weight:700}.podium span{d
 .fame .card{background:#171c2e;border-radius:10px;padding:10px 12px}.fame h4{margin:0 0 6px;color:#ffd56b;font-size:.9rem}
 .fame .r{display:flex;justify-content:space-between;gap:6px;padding:3px 0;border-top:1px solid #232a42;font-size:.88rem}
 .fame .r:first-of-type{border-top:none}.fame .st{white-space:nowrap;color:#ffe9a8}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.badge{background:#22294a;border:1px solid #34407a;border-radius:9px;
+padding:5px 8px;font-size:.85rem}.badge small{display:block;color:#8d96ad;font-size:.75rem}
+.icons{font-size:1.05rem;letter-spacing:2px}
+.tierrow{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-top:1px solid #232a42}.tierrow:first-child{border-top:none}
+.tierrow .chips{display:flex;flex-wrap:wrap;gap:5px}.chip{background:#22294a;border-radius:8px;padding:2px 7px;font-size:.82rem}
+.chip .upc{color:#7ee2a1}.chip .dnc{color:#ff8a8a}
+form.sign{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}form.sign input{flex:1;min-width:150px;background:#0f1320;
+color:#e8ecf5;border:1px solid #3c4878;border-radius:7px;padding:7px}
 """
 
 
@@ -1074,6 +1110,13 @@ def tournaments_list_html(tours):
     live = "".join(f'<a class="live" href="/torneo{q(id=t["id"])}">🔴 En curso: <b>{html.escape(t["name"])}</b>'
                    f'<div class="muted">{html.escape(tour_summary(t))}</div></a>'
                    for t in ordered if t["state"] == "En curso")
+    upcoming = sorted((t for t in ordered if t["state"] == "Próximo"), key=lambda t: t["start"])
+    if upcoming:
+        live += ('<details class="tours" open><summary>📅 Próximos torneos</summary>'
+                 + "".join(f'<a class="titem" href="/torneo{q(id=t["id"])}"><b>{html.escape(t["name"])}</b>'
+                           f'{" · inscripciones abiertas" if t["open"] else ""}'
+                           f'<div class="muted">{html.escape(tour_summary(t))}</div></a>' for t in upcoming)
+                 + "</details>")
     cats = {}
     for t in ordered:  # cada tipo en su apartado, del más reciente al primero
         cats.setdefault(t["category"], []).append(t)
@@ -1100,20 +1143,279 @@ def render_tournament(params):
     dl = ("".join(f'<div class="duel">{phase(d)}{duel_line(d, "todo")}</div>' for d in mine)
           or '<p class="sub">Todavía no hay duelos.</p>')
     bonus = f" (+{round(t['bonus'])} puntos de bono)" if t["champion"] and t["bonus"] else ""
+    signup = ""
+    if t["open"]:
+        lst = ", ".join(html.escape(n) for n in t["signups"]) or "—"
+        form = ""
+        if t["state"] == "Próximo":
+            msg = '<p class="sub" style="color:#7ee2a1">¡Listo, quedaste inscrito!</p>' if params.get("ok") else ""
+            form = (f'{msg}<form class="sign" method="post" action="/inscribir"><input type="hidden" name="id" '
+                    f'value="{html.escape(t["id"])}"><input name="nombre" maxlength="30" required '
+                    f'placeholder="Tu nombre en EDOPro"><button>Inscribirme</button></form>')
+        signup = (f'<h2>Inscripciones</h2><p class="sub">Escribe tu nombre tal como lo usas en EDOPro.</p>{form}'
+                  f'<p class="sub">Inscritos ({len(t["signups"])}): {lst}</p>')
     body = f"""{back}<h1>🏆 {html.escape(t["name"])}</h1>
 <p class="sub">{html.escape(tour_summary(t))}{html.escape(bonus)}</p>
 <p class="sub">Participantes: {html.escape(", ".join(t["everyone"]) or "—")}. Los duelos del torneo valen el doble
 en la tabla general.</p>
+{signup}
 {tournament_body(t)}
 <h2>Duelos del torneo</h2>{dl}
 <footer>v{VERSION}</footer>"""
     return page(body, t["name"] + " · " + TITLE)
 
 
-def salon_html():
+# ---------------------------------------------------------------- salón de la fama automático
+def tour_podium(t):
+    """Podio de un torneo terminado: 1.º, 2.º y 3.º (en eliminatoria, los que perdieron en semifinal)."""
+    champ = tour_champion(t)
+    if not champ:
+        return []
+    second, third = "", []
+    if t.get("bracket"):
+        rounds = t["bracket"]
+        final = rounds[-1][0]
+        if final["winner"]:
+            second = final["b"] if final["winner"] == final["a"] else final["a"]
+        if len(rounds) >= 2:
+            for m in rounds[-2]:
+                if m["winner"] and m["a"] not in (None, BYE) and m["b"] not in (None, BYE):
+                    third.append(m["b"] if m["winner"] == m["a"] else m["a"])
+    else:
+        rows = [r for r in t["rows"] if r["total"] and r["name"] != champ]
+        second = rows[0]["name"] if rows else ""
+        third = [rows[1]["name"]] if len(rows) > 1 else []
+    out = [["🥇", champ]]
+    if second and second not in (None, BYE):
+        out.append(["🥈", second])
+    if third:
+        out.append(["🥉", " & ".join(x for x in third if x)])
+    return out
+
+
+def salon_data(all_tours):
+    """Salón de la Fama: lo escrito en salon_fama.json más los campeones de los torneos del servidor."""
     data = load_json(SALON, {})
-    cats = data.get("categorias") or []
+    cats = [{"nombre": c.get("nombre", ""), "campeones": [list(x) for x in c.get("campeones") or []]}
+            for c in data.get("categorias") or []]
     last = data.get("ultimo_torneo") or {}
+    amap = alias_map()
+    finished = sorted((t for t in all_tours if t["state"] == "Terminado" and tour_champion(t)),
+                      key=lambda t: t["end"])
+    for t in finished:
+        champ = tour_champion(t)
+        cat = next((c for c in cats if c["nombre"].strip().lower() == t["category"].strip().lower()), None)
+        if cat is None:
+            cat = {"nombre": t["category"], "campeones": []}
+            cats.append(cat)
+        key = canon(champ, amap).lower()
+        entry = next((e for e in cat["campeones"] if canon(str(e[0]), amap).lower() == key), None)
+        if entry:
+            entry[1] = int(entry[1]) + 1
+        else:
+            cat["campeones"].append([champ, 1])
+        cat["campeones"].sort(key=lambda e: -int(e[1]))
+    if finished:
+        pod = tour_podium(finished[-1])
+        if pod:
+            last = {"nombre": finished[-1]["name"], "podio": pod}
+    return cats, last
+
+
+# ---------------------------------------------------------------- logros
+ACHIEVEMENTS = [
+    ("first", "🎉", "Primera victoria", "Ganó su primer duelo"),
+    ("w10", "🔟", "10 victorias", "Ganó 10 duelos"),
+    ("w25", "🏅", "25 victorias", "Ganó 25 duelos"),
+    ("w50", "👑", "50 victorias", "Ganó 50 duelos"),
+    ("s3", "🔥", "Racha de 3", "Ganó 3 duelos seguidos"),
+    ("s5", "☄️", "Racha de 5", "Ganó 5 duelos seguidos"),
+    ("s10", "🌋", "Racha de 10", "Ganó 10 duelos seguidos"),
+    ("giant", "🗡️", "Matagigantes", "Le ganó a un personaje SSS o SS con uno de tier C o D"),
+    ("upset", "⚡", "Gran sorpresa", "Ganó 40 puntos o más en un solo duelo"),
+    ("collector", "🎭", "Coleccionista", "Jugó con 5 personajes distintos"),
+    ("loyal", "❤️", "Fiel", "Jugó 10 duelos con el mismo personaje"),
+    ("champ", "🏆", "Campeón", "Ganó un torneo del servidor"),
+]
+
+
+def achievements(duels, all_tours):
+    """Logros de cada jugador con todos sus duelos (se llama justo después de stats() de todo el historial)."""
+    tier, _points, _default = tiers_info()
+    wins, streak, best, chars, got = Counter(), Counter(), Counter(), {}, {}
+
+    def give(k, code):
+        got.setdefault(k, set()).add(code)
+
+    for d in sorted((d for d in duels if valid_duel(d)), key=lambda d: d["ts"]):
+        for side in (0, 1):
+            won = d["final"] == side
+            opp = [c for c, _p in d["chars"][1 - side]]
+            for name, (c, _pct) in zip(d["team" + str(side)], d["chars"][side]):
+                k = name.lower()
+                if c:
+                    chars.setdefault(k, Counter())[c] += 1
+                if won:
+                    wins[k] += 1
+                    streak[k] += 1
+                    best[k] = max(best[k], streak[k])
+                    if c and tier(c) in ("C", "D") and any(o and tier(o) in ("SSS", "SS") for o in opp):
+                        give(k, "giant")
+                    if (d.get("delta") or [0, 0])[side] >= 40:
+                        give(k, "upset")
+                elif d["final"] != 2:
+                    streak[k] = 0
+    for k, w in wins.items():
+        for n, code in ((1, "first"), (10, "w10"), (25, "w25"), (50, "w50")):
+            if w >= n:
+                give(k, code)
+    for k, b in best.items():
+        for n, code in ((3, "s3"), (5, "s5"), (10, "s10")):
+            if b >= n:
+                give(k, code)
+    for k, cs in chars.items():
+        if len(cs) >= 5:
+            give(k, "collector")
+        if cs and max(cs.values()) >= 10:
+            give(k, "loyal")
+    for t in all_tours:
+        champ = tour_champion(t)
+        if t["state"] == "Terminado" and champ:
+            for m in split_team(champ):
+                give(m.lower(), "champ")
+    return {k: [a for a in ACHIEVEMENTS if a[0] in codes] for k, codes in got.items()}
+
+
+def achievements_html(players, ach):
+    rows = [(s, ach.get(s["key"], [])) for s in players]
+    rows = [(s, a) for s, a in rows if a]
+    if not rows:
+        return ""
+    items = "".join(f'<div class="r"><span>{html.escape(s["name"])}</span><span class="icons" '
+                    f'title="{html.escape(", ".join(x[2] for x in a))}">{"".join(x[1] for x in a)}</span></div>'
+                    for s, a in sorted(rows, key=lambda r: -len(r[1])))
+    legend = " · ".join(f"{a[1]} {a[2]}" for a in ACHIEVEMENTS)
+    return (f'<h2>🏅 Logros</h2><details class="tours"><summary>Ver los logros de cada jugador</summary>'
+            f'<div class="fame"><div class="card">{items}</div></div><p class="muted">{html.escape(legend)}</p>'
+            f'</details>')
+
+
+# ---------------------------------------------------------------- la mayor sorpresa
+def biggest_upset(duels):
+    best = None
+    for d in duels:
+        if not valid_duel(d) or d["final"] not in (0, 1) or not d.get("delta"):
+            continue
+        g = d["delta"][d["final"]]
+        if g > 0 and (best is None or g > best[0]):
+            best = (g, d)
+    return best
+
+
+def upsets_html(period_duels, key):
+    week = [d for d in period_duels if d["ts"] >= time.time() - 7 * 86400]
+    parts = []
+    for label, lst in (("Esta semana", week), (period_label(key), period_duels)):
+        b = biggest_upset(lst)
+        if b:
+            parts.append(f'<p class="sub"><b>{html.escape(label)}:</b> +{b[0]} puntos</p>'
+                         f'<div class="duel">{duel_line(b[1], key)}</div>')
+    if not parts:
+        return ""
+    return ('<h2>⚡ La mayor sorpresa</h2><p class="sub">El duelo en que el ganador sumó más puntos '
+            'venciendo a alguien que era favorito.</p>' + "".join(parts))
+
+
+# ---------------------------------------------------------------- estadísticas de cartas
+CARD_NAMES = {"mtime": None, "names": {}}
+
+
+def card_names():
+    try:
+        mtime = os.path.getmtime(CARDS)
+    except OSError:
+        return {}
+    if CARD_NAMES["mtime"] != mtime:
+        data = load_json(CARDS, {})
+        CARD_NAMES["names"] = {int(k): v for k, v in (data.get("n") or {}).items()}
+        CARD_NAMES["mtime"] = mtime
+    return CARD_NAMES["names"]
+
+
+def cards_html(period_duels):
+    names = card_names()
+    if not names:
+        return ""
+    used, won, decks = Counter(), Counter(), 0
+    for d in period_duels:
+        if not valid_duel(d):
+            continue
+        for side in (0, 1):
+            for deck in (d.get("decks") or [[], []])[side]:
+                cards = {names[c] for c in deck if c in names}
+                if not cards:
+                    continue
+                decks += 1
+                for c in cards:
+                    used[c] += 1
+                    if d["final"] == side:
+                        won[c] += 1
+    if not decks:
+        return ""
+    top = used.most_common(15)
+    min_uses = max(3, round(decks * 0.1))
+    best = sorted(((c, won[c] / n, n) for c, n in used.items() if n >= min_uses), key=lambda x: (-x[1], -x[2]))[:10]
+
+    def table(rows, head):
+        return (f'<table><tr><th>Carta</th><th>{head[0]}</th><th>{head[1]}</th></tr>'
+                + "".join(f'<tr><td class="n">{html.escape(c)}</td><td>{a}</td><td>{b}</td></tr>' for c, a, b in rows)
+                + "</table>")
+    t1 = table([(c, f"{round(100 * n / decks)}%", f"{round(100 * won[c] / n)}%") for c, n in top],
+               ("En decks", "Ganan"))
+    t2 = (table([(c, f"{round(100 * w)}%", n) for c, w, n in best], ("Ganan", "Decks")) if best else
+          f'<p class="sub">Todavía faltan duelos (cada carta necesita estar en {min_uses} decks).</p>')
+    return (f'<h2>🃏 Estadísticas de cartas</h2><details class="tours"><summary>Ver las cartas más usadas y las que más '
+            f'ganan ({decks} decks)</summary><h3 style="margin:.6em 0 .3em">Las más usadas</h3>{t1}'
+            f'<h3 style="margin:.9em 0 .3em">Las que más ganan</h3><p class="muted">Solo cartas que estuvieron en '
+            f'{min_uses} decks o más.</p>{t2}</details>')
+
+
+# ---------------------------------------------------------------- tier list en vivo
+def tierlist_html(chars):
+    tier, points, _default = tiers_info()
+    order = sorted(points, key=lambda t: -points[t])
+    live = {c["name"]: c["points"] for c in chars}
+    all_names = set(load_json(TIERS, {}).get("personajes") or {}) | set(live)
+
+    def performs(p):
+        return next((t for t in order if p >= points[t]), order[-1])
+
+    rows = []
+    for t in order:
+        members = sorted((n for n in all_names if tier(n) == t), key=lambda n: (-live.get(n, points[t]), n.lower()))
+        if not members:
+            continue
+        chips = []
+        for n in members:
+            p = live.get(n)
+            if p is None:
+                chips.append(f'<span class="chip muted">{html.escape(n)}</span>')
+                continue
+            pt = performs(p)
+            arrow = ""
+            if order.index(pt) < order.index(t):
+                arrow = f' <span class="upc">▲ {html.escape(pt)}</span>'
+            elif order.index(pt) > order.index(t):
+                arrow = f' <span class="dnc">▼ {html.escape(pt)}</span>'
+            chips.append(f'<span class="chip">{html.escape(n)} · {p}{arrow}</span>')
+        rows.append(f'<div class="tierrow">{tier_badge(t)}<div class="chips">{"".join(chips)}</div></div>')
+    return ('<h2>📊 Tier list en vivo</h2><details class="tours"><summary>Ver la tier list con los puntos de '
+            'esta temporada</summary><p class="muted">▲/▼ = con sus puntos actuales rinde como otra tier. En gris, '
+            f'los que aún no jugaron.</p>{"".join(rows)}</details>')
+
+
+def salon_html(all_tours):
+    cats, last = salon_data(all_tours)
     if not cats and not last.get("podio"):
         return ""
     podium = "".join(f'<div><span>{html.escape(str(m))}</span>{html.escape(str(n))}</div>'
@@ -1238,12 +1540,15 @@ def render_public(params):
     key = period_key((params.get("t") or [""])[0])
     a, b = period_bounds(key)
     _p, _c, all_tours = stats(duels)  # torneos con todos sus duelos (antes de la temporada elegida)
+    ach = achievements(duels, all_tours)  # con los puntos de todo el historial
     players, chars, _tours = stats(duels, a, b)
     hp, hc = head_to_head(duels)
     period_duels = [d for d in duels if not d["annulled"] and not d["self"]
                     and (a is None or d["ts"] >= a) and (b is None or d["ts"] < b)]
     duel_html = ("".join(f'<div class="duel">{duel_line(d, key)}</div>' for d in period_duels[:20])
                  or '<p class="sub">—</p>')
+    extra_html = upsets_html(period_duels, key) + achievements_html(players, ach)
+    stats_html = tierlist_html(chars) + cards_html(period_duels)
     tours_html = ('<h2>Torneos</h2><p class="sub">Cada tipo de torneo tiene su apartado: tócalo para ver sus '
                   'torneos, del más reciente al primero, y toca un torneo para ver su tabla, sus grupos o sus llaves. '
                   'Los duelos de torneo también suman, el doble, a la tabla general.</p>'
@@ -1258,6 +1563,7 @@ gana pocos si era el favorito y muchos si no lo era. El favorito se calcula con 
 tier de su personaje. Los duelos de torneo valen el doble. V = victorias · D = derrotas · E = empates. Los
 cuadritos son los últimos 5 duelos y 🔥 las victorias seguidas. Toca un nombre para ver su ficha.</p>
 {players_table(players, key)}
+{extra_html}
 <h2>Personajes</h2>
 <p class="sub">Cada personaje empieza con los puntos de su tier (SSS {DEFAULT_POINTS["SSS"]} … D {DEFAULT_POINTS["D"]})
 y sube o baja con sus duelos. Cada deck se compara con los decks de los personajes y cuenta para el más
@@ -1267,9 +1573,10 @@ parecido (desde un {MIN_PCT}% de parecido).</p>{chars_table(chars)}
 <h2>Enfrentamientos entre personajes</h2>
 <p class="sub">Cómo le va a cada personaje contra otro, en todos los duelos 1 contra 1 jugados (de siempre).</p>
 {matchups_html(hc)}
+{stats_html}
 {favorites_html(players, chars, hp, hc)}
 {tours_html}
-{salon_html()}
+{salon_html(all_tours)}
 <h2>Temporadas</h2>
 <p class="sub">El campeón de cada temporada y de cada semestre es quien termina con más puntos.</p>
 {seasons_html(duels)}
@@ -1307,6 +1614,8 @@ def render_player(params):
     key = period_key((params.get("t") or [""])[0])
     a, b = period_bounds(key)
     duels = load_duels()
+    _p, _c, all_tours = stats(duels)
+    ach = achievements(duels, all_tours).get(name.lower(), [])
     players, _chars, _tours = stats(duels, a, b)
     hp, _hc = head_to_head(duels)
     s = next((p for p in players if p["key"] == name.lower()), None)
@@ -1342,6 +1651,7 @@ def render_player(params):
 <p class="sub">{html.escape(period_label(key))} · Puesto {s["pos"]} de {len(players)} · <b>{s["points"]} puntos</b> ·
 {s["w"]} V, {s["l"]} D, {s["d"]} E ({s["pct"]}%) · Forma: {form_html(s)}</p>
 {tabs}
+<h2>Logros</h2>{('<div class="badges">' + "".join(f'<div class="badge">{x[1]} {html.escape(x[2])}<small>{html.escape(x[3])}</small></div>' for x in ach) + '</div>') if ach else '<p class="sub">Todavía ninguno.</p>'}
 <h2>Puntos después de cada duelo</h2>{chart_svg(s["history"])}
 <h2>Personajes que usa</h2>
 <table><tr><th>Personaje</th><th>Duelos</th><th>V</th><th>D</th><th>E</th><th>%</th></tr>{crow}</table>
@@ -1370,7 +1680,18 @@ def render_admin():
         )
         items.append(f'<div class="{cls}"><div class="muted">{state}</div>{duel_line(d)}'
                      f'<form method="post" action="/admin"><input type="hidden" name="f" value="{fid}">{buttons}</form></div>')
+    signs = []
+    for t in tournaments_info():
+        if t["open"] and t["signups"]:
+            btns = "".join(f'<form method="post" action="/admin" style="display:inline"><input type="hidden" name="f" '
+                           f'value="{html.escape(t["id"] + "|" + n.lower())}"><button class="r" name="a" value="quitar">'
+                           f'Quitar {html.escape(n)}</button></form>' for n in t["signups"])
+            signs.append(f'<div class="duel"><b>{html.escape(t["name"])}</b> · inscritos: {btns}</div>')
+    signs_html = ("<h2>Inscripciones a torneos</h2>" + "".join(signs)) if signs else ""
     body = f"""<h1>Administrar resultados</h1>
+<p><a href="/admin/respaldo">⬇ Descargar copia de seguridad de los resultados</a>
+<span class="muted">(guárdala en tu PC o en Drive; si algún día se pierde el servidor, con ella se recupera todo)</span></p>
+{signs_html}
 <p class="sub">Los cambios se aplican al momento en el <a href="/">ranking</a>. Los duelos con
 <span class="warn">⚠ Nerfeo</span> usaron cartas nerfeadas para su personaje: puedes anularlos.</p>
 {''.join(items) or '<p class="sub">Todavía no hay duelos registrados.</p>'}"""
@@ -1445,10 +1766,54 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authorized():
                 return self.ask_auth()
             self.send_html(render_admin())
+        elif path == "/admin/respaldo":
+            if not self.authorized():
+                return self.ask_auth()
+            self.send_backup()
         else:
             self.send_html(page("<p>No existe esta página.</p>"), 404)
 
+    def send_backup(self):
+        tmp = DB + ".respaldo"
+        with db_lock:
+            src, dst = sqlite3.connect(DB), sqlite3.connect(tmp)
+            src.backup(dst)
+            dst.close()
+            src.close()
+        data = open(tmp, "rb").read()
+        os.remove(tmp)
+        stamp = datetime.now(TZ).strftime("%Y%m%d-%H%M")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Disposition", f'attachment; filename="ranking-respaldo-{stamp}.db"')
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def redirect(self, where):
+        self.send_response(303)
+        self.send_header("Location", where)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def do_signup(self):
+        length = int(self.headers.get("Content-Length", "0") or 0)
+        form = urllib.parse.parse_qs(self.rfile.read(min(length, 4000)).decode("utf-8"))
+        tid = (form.get("id") or [""])[0]
+        name = re.sub(r"\s+", " ", (form.get("nombre") or [""])[0]).strip()[:30]
+        t = next((x for x in tournaments_info() if x["id"] == tid), None)
+        if not t or not t["open"] or time.time() >= t["start"] or not name:
+            return self.redirect(f"/torneo{q(id=tid)}")
+        name = canon(name, alias_map())
+        with db_lock, db() as con:
+            n = con.execute("select count(*) from signups where tid=?", (tid,)).fetchone()[0]
+            if n < 64:
+                con.execute("insert or ignore into signups values (?,?,?,?)", (tid, name.lower(), name, int(time.time())))
+        self.redirect(f"/torneo{q(id=tid, ok=1)}")
+
     def do_POST(self):
+        if urllib.parse.urlparse(self.path).path == "/inscribir":
+            return self.do_signup()
         if urllib.parse.urlparse(self.path).path != "/admin":
             return self.send_html(page("<p>No existe esta página.</p>"), 404)
         if not self.authorized():
@@ -1465,7 +1830,11 @@ class Handler(BaseHTTPRequestHandler):
             "anu": "update duels set annulled=1 where file=?",
             "res": "update duels set annulled=0 where file=?",
         }.get(a)
-        if sql and f:
+        if a == "quitar" and "|" in f:
+            tid, key = f.split("|", 1)
+            with db_lock, db() as con:
+                con.execute("delete from signups where tid=? and key=?", (tid, key))
+        elif sql and f:
             with db_lock, db() as con:
                 con.execute(sql, (f,))
         self.send_response(303)
