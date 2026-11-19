@@ -4,7 +4,7 @@
 Lee las repeticiones (.yrpX) que guarda Multirole al terminar cada duelo, apunta quién
 ganó y con qué deck, reconoce a qué personaje se parece cada deck y lo muestra en una
 página web: ranking de jugadores, de personajes y de torneos. Los puntos funcionan como un
-ranking tipo FIFA/Elo: cada personaje empieza con los puntos de su tier (tiers.json) y ganar
+sistema Elo: cada personaje empieza con los puntos de su tier (tiers.json) y ganar
 con un personaje débil contra uno fuerte vale más. Los torneos se definen en torneos.json.
 Desde /admin, 4RMAss puede anular un resultado o cambiar el ganador.
 
@@ -46,7 +46,7 @@ URL_BASE = CHARS_URL[:-len("personajes.json")] if CHARS_URL.endswith("personajes
 SELF_PATH = os.path.abspath(__file__)
 UPDATE_MARK = SELF_PATH + ".actualizado"
 REJECTED = SELF_PATH + ".rechazada"  # huella de una versión que falló al arrancar (no se reinstala)
-VERSION = "2.1"
+VERSION = "2.2"
 TZ = timezone(timedelta(hours=int(os.environ.get("RANKING_TZ_HOURS", "-5"))))  # Lima
 KEEP_DAYS = int(os.environ.get("RANKING_KEEP_DAYS", "90"))
 MIN_PCT = int(os.environ.get("RANKING_MIN_PCT", "40"))  # parecido mínimo para asignar personaje
@@ -678,10 +678,11 @@ def render_public():
                       'Los duelos de torneo también suman (el doble) a la tabla general.</p>'
                       + "".join(tournament_html(t) for t in tours_sorted))
     body = f"""<h1>🏆 Ranking · {TITLE}</h1>
-<p class="sub">Puntos tipo ranking FIFA: cada jugador empieza con {START_PLAYER}. Ganar da más puntos si el
-rival es más fuerte o si tu personaje es más débil (según su tier), y perder contra alguien más débil quita
-más. Los duelos de torneo valen el doble. V = victorias · D = derrotas · E = empates.</p>
-<h2>Jugadores</h2>{players_table(players)}
+<h2>Jugadores</h2>
+<p class="sub">Todos empiezan con {START_PLAYER} puntos. En cada duelo el ganador le quita puntos al perdedor:
+gana pocos si era el favorito y muchos si no lo era. El favorito se calcula con los puntos de cada jugador y la
+tier de su personaje. Los duelos de torneo valen el doble. V = victorias · D = derrotas · E = empates.</p>
+{players_table(players)}
 <h2>Personajes</h2>
 <p class="sub">Cada personaje empieza con los puntos de su tier (SSS {DEFAULT_POINTS["SSS"]} … D {DEFAULT_POINTS["D"]})
 y sube o baja con sus duelos. Cada deck se compara con los decks de los personajes y cuenta para el más
