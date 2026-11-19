@@ -1,0 +1,2611 @@
+{
+"_ayuda": "Generado a partir de lflists/personajes-4rmass.lflist.conf. mapa: personaje del ranking -> listas de nerfeos que puede cumplir (basta con cumplir una).",
+"mapa": {
+"Yugi": [
+"Atem",
+"Yugi"
+],
+"Kaiba": [
+"Kaiba"
+],
+"Jaden (Manga)": [
+"Jaden (Manga)"
+],
+"Jaden": [
+"Jaden"
+],
+"Shark": [
+"Shark"
+],
+"Crow": [
+"Crow"
+],
+"Kite": [
+"Kaito"
+],
+"Yuri": [
+"Yuri"
+],
+"Serena": [
+"Serena"
+],
+"Joey": [
+"Joey"
+],
+"Yugi (Manga)": [
+"Yugi (Manga)"
+],
+"Syrus": [
+"Syrus"
+],
+"Aster": [
+"Astro"
+],
+"The Big Five": [
+"Big V"
+],
+"Yami Marik": [
+"Yami Marik"
+],
+"Kaiba (Manga)": [
+"Kaiba (Manga)"
+],
+"Shun": [
+"Kurosaki"
+],
+"Chazz": [
+"Chazz"
+],
+"Mai": [
+"Mai"
+],
+"Jack Atlas": [
+"Jack"
+],
+"Zane": [
+"Zane"
+],
+"Aigami": [
+"Aigami"
+],
+"Vetrix": [
+"Tron"
+],
+"Alito": [
+"Alito"
+],
+"Team Ragnarok": [
+"Team Ragnarok"
+],
+"Koyo": [
+"Koyo"
+],
+"Alexis": [
+"Alexis"
+]
+},
+"listas": {
+"Atem": [
+{
+"ids": [
+511000162
+],
+"max": 0,
+"nombre": "Altar of Restoration"
+},
+{
+"ids": [
+511000228,
+511004015
+],
+"max": 0,
+"nombre": "Catapult Turtle (Anime)"
+},
+{
+"ids": [
+511001596,
+511600104
+],
+"max": 0,
+"nombre": "Fiend's Sanctuary (Anime)"
+},
+{
+"ids": [
+511000149
+],
+"max": 0,
+"nombre": "Kuribandit (Anime)"
+},
+{
+"ids": [
+77414722
+],
+"max": 0,
+"nombre": "Magic Jammer"
+},
+{
+"ids": [
+93108433,
+511000373
+],
+"max": 0,
+"nombre": "Monster Recovery"
+},
+{
+"ids": [
+71703785
+],
+"max": 0,
+"nombre": "Palladium Oracle Mahad"
+},
+{
+"ids": [
+73443672,
+513000118
+],
+"max": 0,
+"nombre": "Underworld Circle"
+}
+],
+"Yugi": [
+{
+"ids": [
+72989439,
+72989440
+],
+"max": 0,
+"nombre": "Black Luster Soldier - Envoy of the Beginning"
+},
+{
+"ids": [
+511000228,
+511004015
+],
+"max": 0,
+"nombre": "Catapult Turtle (Anime)"
+},
+{
+"ids": [
+57728570,
+57728571,
+511000822,
+511000823,
+513000009
+],
+"max": 0,
+"nombre": "Crush Card Virus"
+},
+{
+"ids": [
+40737112,
+511001039
+],
+"max": 0,
+"nombre": "Dark Magician of Chaos"
+},
+{
+"ids": [
+54175023
+],
+"max": 0,
+"nombre": "Dimension Guardian"
+},
+{
+"ids": [
+511001596,
+511600104
+],
+"max": 0,
+"nombre": "Fiend's Sanctuary (Anime)"
+},
+{
+"ids": [
+77414722
+],
+"max": 0,
+"nombre": "Magic Jammer"
+},
+{
+"ids": [
+93749093
+],
+"max": 2,
+"nombre": "Marshmacaron"
+},
+{
+"ids": [
+71703785
+],
+"max": 0,
+"nombre": "Palladium Oracle Mahad"
+}
+],
+"Kaiba": [
+{
+"ids": [
+53347303,
+511002418
+],
+"max": 0,
+"nombre": "Blue-Eyes Shining Dragon"
+},
+{
+"ids": [
+82301904,
+511000819
+],
+"max": 0,
+"nombre": "Chaos Emperor Dragon - Envoy of the End"
+},
+{
+"ids": [
+57728570,
+57728571,
+511000822,
+511000823,
+513000009
+],
+"max": 0,
+"nombre": "Crush Card Virus"
+},
+{
+"ids": [
+511001596,
+511600104
+],
+"max": 0,
+"nombre": "Fiend's Sanctuary (Anime)"
+},
+{
+"ids": [
+513000111
+],
+"max": 0,
+"nombre": "Final Attack Orders (Anime)"
+},
+{
+"ids": [
+77363314,
+511013022
+],
+"max": 1,
+"nombre": "Krystal Dragon"
+},
+{
+"ids": [
+28566710
+],
+"max": 0,
+"nombre": "Last Turn"
+},
+{
+"ids": [
+68005187,
+513000054
+],
+"max": 0,
+"nombre": "Soul Exchange"
+},
+{
+"ids": [
+54591086,
+513000122
+],
+"max": 0,
+"nombre": "Virus Cannon"
+},
+{
+"ids": [
+13945283
+],
+"max": 0,
+"nombre": "Wall of Illusion"
+}
+],
+"Jaden (Manga)": [
+{
+"ids": [
+23204029
+],
+"max": 0,
+"nombre": "Contrast HERO Chaos"
+},
+{
+"ids": [
+511018008
+],
+"max": 0,
+"nombre": "Duel"
+},
+{
+"ids": [
+69572169,
+511002359
+],
+"max": 0,
+"nombre": "Elemental HERO Flash"
+},
+{
+"ids": [
+511310008
+],
+"max": 0,
+"nombre": "Elemental HERO Great Tornado (Manga)"
+},
+{
+"ids": [
+41077745,
+511002358
+],
+"max": 0,
+"nombre": "Elemental HERO Ice Edge"
+},
+{
+"ids": [
+511002353
+],
+"max": 0,
+"nombre": "Elemental HERO Inferno (Manga)"
+},
+{
+"ids": [
+84536654
+],
+"max": 0,
+"nombre": "Form Change"
+},
+{
+"ids": [
+25614410,
+511000503
+],
+"max": 0,
+"nombre": "Legacy of a HERO"
+},
+{
+"ids": [
+511000504
+],
+"max": 0,
+"nombre": "Magician's Library"
+},
+{
+"ids": [
+93600443
+],
+"max": 0,
+"nombre": "Mask Change II"
+},
+{
+"ids": [
+29095552,
+511310009
+],
+"max": 0,
+"nombre": "Masked HERO Acid"
+},
+{
+"ids": [
+58481572,
+58481573
+],
+"max": 0,
+"nombre": "Masked HERO Dark Law"
+},
+{
+"ids": [
+22093873
+],
+"max": 0,
+"nombre": "Masked HERO Divine Wind"
+},
+{
+"ids": [
+10920352,
+511756008
+],
+"max": 0,
+"nombre": "Masked HERO Vapor"
+},
+{
+"ids": [
+511002393
+],
+"max": 0,
+"nombre": "Power Shackle"
+},
+{
+"ids": [
+66367984,
+511000500
+],
+"max": 0,
+"nombre": "Protection of the Elements"
+},
+{
+"ids": [
+511002355
+],
+"max": 0,
+"nombre": "Residual Reflection"
+},
+{
+"ids": [
+71564252,
+71564253,
+513000038
+],
+"max": 0,
+"nombre": "Thunder King Rai-Oh"
+}
+],
+"Jaden": [
+{
+"ids": [
+100005002,
+513000161
+],
+"max": 0,
+"nombre": "Battle Fusion (VG)"
+},
+{
+"ids": [
+511001870
+],
+"max": 0,
+"nombre": "Cross Heart"
+},
+{
+"ids": [
+511000463
+],
+"max": 0,
+"nombre": "Damage Interest"
+},
+{
+"ids": [
+213326
+],
+"max": 1,
+"nombre": "E - Emergency Call"
+},
+{
+"ids": [
+511000494
+],
+"max": 0,
+"nombre": "Effect Shut"
+},
+{
+"ids": [
+810000011
+],
+"max": 0,
+"nombre": "Elemental HERO Bubbleman (Anime)"
+},
+{
+"ids": [
+79979666
+],
+"max": 1,
+"nombre": "Elemental HERO Bubbleman"
+},
+{
+"ids": [
+72926163,
+511002031
+],
+"max": 0,
+"nombre": "Elemental HERO Neos Knight"
+},
+{
+"ids": [
+13293158
+],
+"max": 0,
+"nombre": "Evil HERO Wild Cyclone"
+},
+{
+"ids": [
+26902560
+],
+"max": 1,
+"nombre": "Fusion Sage"
+},
+{
+"ids": [
+5126490,
+511000497
+],
+"max": 0,
+"nombre": "Neos Wiseman"
+},
+{
+"ids": [
+86346643
+],
+"max": 0,
+"nombre": "Rainbow Neos"
+},
+{
+"ids": [
+80831721,
+100000247,
+513000057
+],
+"max": 0,
+"nombre": "Sabatiel - The Philosopher's Stone"
+},
+{
+"ids": [
+89693655,
+511000496
+],
+"max": 0,
+"nombre": "Subspace Battle"
+}
+],
+"Shark": [
+{
+"ids": [
+511001449
+],
+"max": 0,
+"nombre": "Adapt to Adversity"
+},
+{
+"ids": [
+511001175
+],
+"max": 0,
+"nombre": "Aqua Mirage"
+},
+{
+"ids": [
+511001189
+],
+"max": 0,
+"nombre": "Chaos Tempest Draw"
+},
+{
+"ids": [
+810000032
+],
+"max": 0,
+"nombre": "Depth Eruption"
+},
+{
+"ids": [
+64319467,
+511002759
+],
+"max": 0,
+"nombre": "Double Fin Shark"
+},
+{
+"ids": [
+511000230
+],
+"max": 0,
+"nombre": "Number 1: Numeron Gate Ekam (Anime)"
+},
+{
+"ids": [
+511010010
+],
+"max": 0,
+"nombre": "Number 10: Illumiknight (Anime)"
+},
+{
+"ids": [
+511000369
+],
+"max": 0,
+"nombre": "Number 100: Numeron Dragon (Anime)"
+},
+{
+"ids": [
+513000017
+],
+"max": 0,
+"nombre": "Number 101: Silent Honor ARK (Anime)"
+},
+{
+"ids": [
+511002870
+],
+"max": 0,
+"nombre": "Number 102: Star Seraph Sentry (Anime)"
+},
+{
+"ids": [
+511010103
+],
+"max": 0,
+"nombre": "Number 103: Ragnazero (Anime)"
+},
+{
+"ids": [
+511010104
+],
+"max": 0,
+"nombre": "Number 104: Masquerade (Anime)"
+},
+{
+"ids": [
+511010105
+],
+"max": 0,
+"nombre": "Number 105: Battlin' Boxer Star Cestus (Anime)"
+},
+{
+"ids": [
+511002111
+],
+"max": 0,
+"nombre": "Number 106: Giant Hand (Anime)"
+},
+{
+"ids": [
+511010107
+],
+"max": 0,
+"nombre": "Number 107: Galaxy-Eyes Tachyon Dragon (Anime)"
+},
+{
+"ids": [
+511010011
+],
+"max": 0,
+"nombre": "Number 11: Big Eye (Anime)"
+},
+{
+"ids": [
+511010012
+],
+"max": 0,
+"nombre": "Number 12: Crimson Shadow Armor Ninja (Anime)"
+},
+{
+"ids": [
+511015132
+],
+"max": 0,
+"nombre": "Number 13: Embodiment of Crime (Manga)"
+},
+{
+"ids": [
+511000184
+],
+"max": 0,
+"nombre": "Number 14: Greedy Sarameya (Manga)"
+},
+{
+"ids": [
+511001999
+],
+"max": 0,
+"nombre": "Number 15: Gimmick Puppet Giant Grinder (Anime)"
+},
+{
+"ids": [
+513000018
+],
+"max": 0,
+"nombre": "Number 16: Shock Master (Anime)"
+},
+{
+"ids": [
+511001779
+],
+"max": 0,
+"nombre": "Number 19: Freezadon (Anime)"
+},
+{
+"ids": [
+511001339
+],
+"max": 0,
+"nombre": "Number 2: Ninja Shadow Mosquito (Anime)"
+},
+{
+"ids": [
+511000231
+],
+"max": 0,
+"nombre": "Number 2: Numeron Gate Dve (Anime)"
+},
+{
+"ids": [
+511010020
+],
+"max": 0,
+"nombre": "Number 20: Giga-Brilliant (Anime)"
+},
+{
+"ids": [
+511010021
+],
+"max": 0,
+"nombre": "Number 21: Frozen Lady Justice (Manga)"
+},
+{
+"ids": [
+511000183
+],
+"max": 0,
+"nombre": "Number 23: Lancelot, Dark Knight of the Underworld (Manga)"
+},
+{
+"ids": [
+511010025
+],
+"max": 0,
+"nombre": "Number 25: Force Focus (Anime)"
+},
+{
+"ids": [
+511000512
+],
+"max": 0,
+"nombre": "Number 28: Titanic Moth (Manga)"
+},
+{
+"ids": [
+810000081
+],
+"max": 0,
+"nombre": "Number 3: Cicada King (Anime)"
+},
+{
+"ids": [
+511000232
+],
+"max": 0,
+"nombre": "Number 3: Numeron Gate Trini (Anime)"
+},
+{
+"ids": [
+511010030
+],
+"max": 0,
+"nombre": "Number 30: Acid Golem of Destruction (Anime)"
+},
+{
+"ids": [
+511015133
+],
+"max": 0,
+"nombre": "Number 31: Embodiment of Punishment (Manga)"
+},
+{
+"ids": [
+511002091
+],
+"max": 0,
+"nombre": "Number 33: Chronomaly Machu Mech (Anime)"
+},
+{
+"ids": [
+511010034
+],
+"max": 0,
+"nombre": "Number 34: Terror-Byte (Anime)"
+},
+{
+"ids": [
+511010035
+],
+"max": 0,
+"nombre": "Number 35: Ravenous Tarantula (Manga)"
+},
+{
+"ids": [
+511001273
+],
+"max": 0,
+"nombre": "Number 37: Hope Woven Dragon Spider Shark (Manga)"
+},
+{
+"ids": [
+511001275
+],
+"max": 0,
+"nombre": "Number 38: Hope Harbinger Dragon Titanic Galaxy (Manga)"
+},
+{
+"ids": [
+511002599
+],
+"max": 0,
+"nombre": "Number 39: Utopia (Anime)"
+},
+{
+"ids": [
+513000060
+],
+"max": 0,
+"nombre": "Number 39: Utopia Beyond (Anime)"
+},
+{
+"ids": [
+511010039
+],
+"max": 0,
+"nombre": "Number 39: Utopia Roots (Anime)"
+},
+{
+"ids": [
+511000233
+],
+"max": 0,
+"nombre": "Number 4: Numeron Gate Catvari (Anime)"
+},
+{
+"ids": [
+511001336
+],
+"max": 0,
+"nombre": "Number 4: Stealth Kragen (Anime)"
+},
+{
+"ids": [
+511002830
+],
+"max": 0,
+"nombre": "Number 40: Gimmick Puppet of Strings (Anime)"
+},
+{
+"ids": [
+511002054
+],
+"max": 0,
+"nombre": "Number 42: Galaxy Tomahawk (Manga)"
+},
+{
+"ids": [
+511001776
+],
+"max": 0,
+"nombre": "Number 43: Manipulator of Souls (Anime)"
+},
+{
+"ids": [
+511001997
+],
+"max": 0,
+"nombre": "Number 44: Sky Pegasus (Anime)"
+},
+{
+"ids": [
+511001998
+],
+"max": 0,
+"nombre": "Number 46: Dragluon (Anime)"
+},
+{
+"ids": [
+511010047
+],
+"max": 0,
+"nombre": "Number 47: Nightmare Shark (Manga)"
+},
+{
+"ids": [
+511015118
+],
+"max": 0,
+"nombre": "Number 48: Shadow Lich (Manga)"
+},
+{
+"ids": [
+511002060
+],
+"max": 0,
+"nombre": "Number 50: Blackship of Corn (Manga)"
+},
+{
+"ids": [
+511002058
+],
+"max": 0,
+"nombre": "Number 52: Diamond Crab King (Manga)"
+},
+{
+"ids": [
+511010053
+],
+"max": 0,
+"nombre": "Number 53: Heart-eartH (Anime)"
+},
+{
+"ids": [
+511002727
+],
+"max": 0,
+"nombre": "Number 54: Lion Heart (Anime)"
+},
+{
+"ids": [
+511010056
+],
+"max": 0,
+"nombre": "Number 56: Gold Rat (Anime)"
+},
+{
+"ids": [
+511002873
+],
+"max": 0,
+"nombre": "Number 58: Burner Visor (Anime)"
+},
+{
+"ids": [
+511002090
+],
+"max": 0,
+"nombre": "Number 6: Chronomaly Atlandis (Anime)"
+},
+{
+"ids": [
+511002088
+],
+"max": 0,
+"nombre": "Number 61: Volcasaurus (Anime)"
+},
+{
+"ids": [
+511010062
+],
+"max": 0,
+"nombre": "Number 62: Galaxy-Eyes Prime Photon Dragon (Anime)"
+},
+{
+"ids": [
+511010064
+],
+"max": 0,
+"nombre": "Number 64: Ronin Raccoon Sandayu (Anime)"
+},
+{
+"ids": [
+511010065
+],
+"max": 0,
+"nombre": "Number 65: Djinn Buster (Anime)"
+},
+{
+"ids": [
+511002749
+],
+"max": 0,
+"nombre": "Number 66: Master Key Beetle (Anime)"
+},
+{
+"ids": [
+513000141
+],
+"max": 0,
+"nombre": "Number 69: Heraldry Crest (Anime)"
+},
+{
+"ids": [
+511010007
+],
+"max": 0,
+"nombre": "Number 7: Lucky Straight (Anime)"
+},
+{
+"ids": [
+511015129
+],
+"max": 0,
+"nombre": "Number 72: Shogi Rook (Manga)"
+},
+{
+"ids": [
+511000513
+],
+"max": 0,
+"nombre": "Number 77: The Seven Sins (Manga)"
+},
+{
+"ids": [
+511001374
+],
+"max": 0,
+"nombre": "Number 8: Heraldic King Genom-Heritage (Anime)"
+},
+{
+"ids": [
+513000062
+],
+"max": 0,
+"nombre": "Number 80: Rhapsody in Berserk (Anime)"
+},
+{
+"ids": [
+511002064
+],
+"max": 0,
+"nombre": "Number 82: Heartlandraco (Manga)"
+},
+{
+"ids": [
+511010083
+],
+"max": 0,
+"nombre": "Number 83: Galaxy Queen (Anime)"
+},
+{
+"ids": [
+511002600
+],
+"max": 0,
+"nombre": "Number 88: Gimmick Puppet of Leo (Anime)"
+},
+{
+"ids": [
+511010009
+],
+"max": 0,
+"nombre": "Number 9: Dyson Sphere (Anime)"
+},
+{
+"ids": [
+511002059
+],
+"max": 0,
+"nombre": "Number 91: Thunder Spark Dragon (Manga)"
+},
+{
+"ids": [
+511000368
+],
+"max": 0,
+"nombre": "Number 92: Heart-eartH Dragon (Anime)"
+},
+{
+"ids": [
+511001608
+],
+"max": 0,
+"nombre": "Number 93: Utopia Kaiser (Manga)"
+},
+{
+"ids": [
+511002913
+],
+"max": 0,
+"nombre": "Number 94: Crystalzero (Anime)"
+},
+{
+"ids": [
+511000515
+],
+"max": 0,
+"nombre": "Number 95: Galaxy-Eyes Dark Matter Dragon (Manga)"
+},
+{
+"ids": [
+511010096
+],
+"max": 0,
+"nombre": "Number 96: Dark Mist (Anime)"
+},
+{
+"ids": [
+513000061
+],
+"max": 0,
+"nombre": "Number 99: Utopic Dragon (Anime)"
+},
+{
+"ids": [
+511000277
+],
+"max": 0,
+"nombre": "Number C1: Numeron Chaos Gate Sunya (Anime)"
+},
+{
+"ids": [
+513000059
+],
+"max": 0,
+"nombre": "Number C101: Silent Honor DARK (Anime)"
+},
+{
+"ids": [
+511001429
+],
+"max": 0,
+"nombre": "Number C102: Archfiend Seraph (Anime)"
+},
+{
+"ids": [
+511001430
+],
+"max": 0,
+"nombre": "Number C103: Ragnafinity (Anime)"
+},
+{
+"ids": [
+511002871
+],
+"max": 0,
+"nombre": "Number C104: Umbral Horror Masquerade (Anime)"
+},
+{
+"ids": [
+511002872
+],
+"max": 0,
+"nombre": "Number C105: Battlin' Boxer Comet Cestus (Anime)"
+},
+{
+"ids": [
+511001431
+],
+"max": 0,
+"nombre": "Number C106: Giant Red Hand (Anime)"
+},
+{
+"ids": [
+511010207
+],
+"max": 0,
+"nombre": "Number C107: Neo Galaxy-Eyes Tachyon Dragon (Anime)"
+},
+{
+"ids": [
+511002482
+],
+"max": 0,
+"nombre": "Number C15: Gimmick Puppet Giant Hunter (Anime)"
+},
+{
+"ids": [
+511010139
+],
+"max": 0,
+"nombre": "Number C39: Utopia Ray (Anime)"
+},
+{
+"ids": [
+511010238
+],
+"max": 0,
+"nombre": "Number C39: Utopia Ray V (Anime)"
+},
+{
+"ids": [
+511010239
+],
+"max": 0,
+"nombre": "Number C39: Utopia Ray Victory (Anime)"
+},
+{
+"ids": [
+511001371
+],
+"max": 0,
+"nombre": "Number C40: Gimmick Puppet of Dark Strings (Anime)"
+},
+{
+"ids": [
+511001777
+],
+"max": 0,
+"nombre": "Number C43: High Manipulator of Chaos (Anime)"
+},
+{
+"ids": [
+511010205
+],
+"max": 0,
+"nombre": "Number C5: Chaos Chimera Dragon (Anime)"
+},
+{
+"ids": [
+511001781
+],
+"max": 0,
+"nombre": "Number C6: Chronomaly Chaos Atlandis (Anime)"
+},
+{
+"ids": [
+511010165
+],
+"max": 0,
+"nombre": "Number C65: King Overfiend (Anime)"
+},
+{
+"ids": [
+511002866
+],
+"max": 0,
+"nombre": "Number C69: Heraldry Crest of Horror (Anime)"
+},
+{
+"ids": [
+513000063
+],
+"max": 0,
+"nombre": "Number C80: Requiem in Berserk (Anime)"
+},
+{
+"ids": [
+511001372
+],
+"max": 0,
+"nombre": "Number C88: Gimmick Puppet Disaster Leo (Anime)"
+},
+{
+"ids": [
+511001659
+],
+"max": 0,
+"nombre": "Number C9: Chaos Dyson Sphere (Anime)"
+},
+{
+"ids": [
+511010192
+],
+"max": 0,
+"nombre": "Number C92: Heart-eartH Chaos Dragon (Anime)"
+},
+{
+"ids": [
+511010196
+],
+"max": 0,
+"nombre": "Number C96: Dark Storm (Anime)"
+},
+{
+"ids": [
+511000192
+],
+"max": 0,
+"nombre": "Number F0: Utopic Future (Anime)"
+},
+{
+"ids": [
+511600070
+],
+"max": 0,
+"nombre": "Number S0: Utopic ZEXAL (Manga)"
+},
+{
+"ids": [
+511002001
+],
+"max": 0,
+"nombre": "Number S39: Utopia Prime (Manga)"
+},
+{
+"ids": [
+511001706
+],
+"max": 0,
+"nombre": "Number S39: Utopia the Lightning (Manga)"
+},
+{
+"ids": [
+511001163
+],
+"max": 0,
+"nombre": "Shark Spark"
+},
+{
+"ids": [
+90303176,
+511002838
+],
+"max": 1,
+"nombre": "Silent Angler"
+},
+{
+"ids": [
+71015787,
+511002771
+],
+"max": 0,
+"nombre": "Silent Wobby"
+},
+{
+"ids": [
+7092142
+],
+"max": 0,
+"nombre": "Torrential Reborn"
+}
+],
+"Crow": [
+{
+"ids": [
+80773359,
+511002083
+],
+"max": 0,
+"nombre": "Assault Blackwing - Onimaru the Divine Thunder"
+},
+{
+"ids": [
+16051717,
+511001955
+],
+"max": 0,
+"nombre": "Assault Blackwing - Raikiri the Rain Shower"
+},
+{
+"ids": [
+53389254,
+511002042
+],
+"max": 1,
+"nombre": "Assault Blackwing - Sohaya the Rain Storm"
+},
+{
+"ids": [
+72930878
+],
+"max": 0,
+"nombre": "Black Sonic"
+},
+{
+"ids": [
+511001954
+],
+"max": 0,
+"nombre": "Blackwing - Silverwind the Ascendant (Anime)"
+},
+{
+"ids": [
+75498415
+],
+"max": 0,
+"nombre": "Blackwing - Sirocco the Dawn"
+},
+{
+"ids": [
+511002219
+],
+"max": 0,
+"nombre": "Blackwing - Vayu the Emblem of Honor (Anime)"
+},
+{
+"ids": [
+14785765,
+511001961
+],
+"max": 0,
+"nombre": "Blackwing - Zephyros the Elite"
+},
+{
+"ids": [
+511002622
+],
+"max": 0,
+"nombre": "Blade Shade"
+},
+{
+"ids": [
+59839761
+],
+"max": 0,
+"nombre": "Delta Crow - Anti Reverse"
+},
+{
+"ids": [
+511000885
+],
+"max": 0,
+"nombre": "Down Force"
+},
+{
+"ids": [
+511002085
+],
+"max": 0,
+"nombre": "Sky Excalibur"
+}
+],
+"Kaito": [
+{
+"ids": [
+100000490
+],
+"max": 0,
+"nombre": "Destiny Overlay"
+},
+{
+"ids": [
+511001828
+],
+"max": 0,
+"nombre": "Galaxy Burst"
+},
+{
+"ids": [
+511010504
+],
+"max": 0,
+"nombre": "Galaxy-Eyes Cipher Dragon (Anime)"
+},
+{
+"ids": [
+511001188
+],
+"max": 0,
+"nombre": "Galaxy Rebirth"
+},
+{
+"ids": [
+98555327
+],
+"max": 0,
+"nombre": "Galaxy Wizard"
+},
+{
+"ids": [
+31801517,
+31801518,
+511010062
+],
+"max": 0,
+"nombre": "Number 62: Galaxy-Eyes Prime Photon Dragon"
+},
+{
+"ids": [
+13492423,
+511002849
+],
+"max": 0,
+"nombre": "Photon Caesar"
+},
+{
+"ids": [
+38973775
+],
+"max": 1,
+"nombre": "Photon Lizard"
+},
+{
+"ids": [
+63223260,
+511002101
+],
+"max": 0,
+"nombre": "Photon Satellite"
+},
+{
+"ids": [
+9354555,
+511013015
+],
+"max": 0,
+"nombre": "Photon Veil"
+},
+{
+"ids": [
+40390147,
+511600384
+],
+"max": 0,
+"nombre": "Starliege Lord Galaxion"
+}
+],
+"Yuri": [
+{
+"ids": [
+44874522
+],
+"max": 0,
+"nombre": "Ancient Gear Reactor Dragon"
+},
+{
+"ids": [
+511002034
+],
+"max": 0,
+"nombre": "Clear Wing Synchro Dragon (Anime)"
+},
+{
+"ids": [
+511009396
+],
+"max": 0,
+"nombre": "Dark Seed Planter"
+},
+{
+"ids": [
+511009381
+],
+"max": 0,
+"nombre": "Greedy Venom Fusion Dragon (Anime)"
+},
+{
+"ids": [
+511009410
+],
+"max": 0,
+"nombre": "Ivy Bind Castle"
+},
+{
+"ids": [
+96622984
+],
+"max": 0,
+"nombre": "Predaplant Flytrap"
+},
+{
+"ids": [
+511009025
+],
+"max": 0,
+"nombre": "Starving Venom Fusion Dragon (Anime)"
+},
+{
+"ids": [
+511009312
+],
+"max": 0,
+"nombre": "Unfinished Ancient Gear"
+}
+],
+"Serena": [
+{
+"ids": [
+6205579,
+511002961
+],
+"max": 1,
+"nombre": "Fusion Parasite"
+},
+{
+"ids": [
+48444114
+],
+"max": 0,
+"nombre": "Luna Light Perfume"
+},
+{
+"ids": [
+511002373
+],
+"max": 0,
+"nombre": "Lunalight Leo Dancer (Anime)"
+}
+],
+"Joey": [
+{
+"ids": [
+511756000
+],
+"max": 0,
+"nombre": "Blue Flame Swordsman (Anime)"
+},
+{
+"ids": [
+511001498
+],
+"max": 0,
+"nombre": "Celebration of Creation"
+},
+{
+"ids": [
+78706415
+],
+"max": 0,
+"nombre": "Fiber Jar"
+},
+{
+"ids": [
+170000194
+],
+"max": 0,
+"nombre": "Goddess Bow (Anime)"
+},
+{
+"ids": [
+511001122
+],
+"max": 0,
+"nombre": "Graverobber (Manga)"
+},
+{
+"ids": [
+10000070
+],
+"max": 0,
+"nombre": "Legendary Dragon Hermos"
+},
+{
+"ids": [
+170000193
+],
+"max": 0,
+"nombre": "Red-Eyes Black Dragon Sword (Anime)"
+},
+{
+"ids": [
+170000197
+],
+"max": 0,
+"nombre": "Rocket Hermos Cannon (Anime)"
+},
+{
+"ids": [
+170000153
+],
+"max": 0,
+"nombre": "The Claw of Hermos (Anime)"
+},
+{
+"ids": [
+140000131
+],
+"max": 0,
+"nombre": "Time Magic Hammer (Anime)"
+}
+],
+"Yugi (Manga)": [
+{
+"ids": [
+72892473
+],
+"max": 0,
+"nombre": "Card Destruction"
+},
+{
+"ids": [
+42664989,
+511001126
+],
+"max": 0,
+"nombre": "Card of Sanctity"
+},
+{
+"ids": [
+54175023
+],
+"max": 0,
+"nombre": "Dimension Guardian"
+},
+{
+"ids": [
+71525232,
+71525242,
+511600050
+],
+"max": 0,
+"nombre": "Gandora-X the Dragon of Demolition"
+},
+{
+"ids": [
+396,
+62279055
+],
+"max": 0,
+"nombre": "Magic Cylinder"
+},
+{
+"ids": [
+93749093
+],
+"max": 2,
+"nombre": "Marshmacaron"
+},
+{
+"ids": [
+40703222,
+810000034
+],
+"max": 0,
+"nombre": "Multiply"
+},
+{
+"ids": [
+511001141
+],
+"max": 0,
+"nombre": "Silent Magician LV0"
+},
+{
+"ids": [
+511001593
+],
+"max": 0,
+"nombre": "Soul Rope (Anime)"
+},
+{
+"ids": [
+179,
+72302403
+],
+"max": 0,
+"nombre": "Swords of Revealing Light"
+},
+{
+"ids": [
+24878656
+],
+"max": 0,
+"nombre": "Toy Box"
+}
+],
+"Syrus": [
+{
+"ids": [
+511002821,
+511003055
+],
+"max": 0,
+"nombre": "Armored Cybern (Anime)"
+},
+{
+"ids": [
+64599569,
+511002108
+],
+"max": 0,
+"nombre": "Chimeratech Overdragon"
+},
+{
+"ids": [
+100000117
+],
+"max": 0,
+"nombre": "Life Force"
+},
+{
+"ids": [
+3659803,
+511010525
+],
+"max": 0,
+"nombre": "Overload Fusion"
+}
+],
+"Astro": [
+{
+"ids": [
+511002867
+],
+"max": 0,
+"nombre": "D-Faceoff"
+},
+{
+"ids": [
+62868900
+],
+"max": 0,
+"nombre": "D - Shield"
+},
+{
+"ids": [
+56570271,
+511003116
+],
+"max": 0,
+"nombre": "Destiny HERO - Disk Commander"
+},
+{
+"ids": [
+511002729
+],
+"max": 0,
+"nombre": "Destiny HERO - Dogma (Anime)"
+},
+{
+"ids": [
+511806001
+],
+"max": 0,
+"nombre": "Destiny HERO - Dreadmaster (Anime)"
+},
+{
+"ids": [
+90579153,
+511009053
+],
+"max": 0,
+"nombre": "Destiny HERO - Dystopia"
+}
+],
+"Big V": [
+{
+"ids": [
+84797028,
+511000405
+],
+"max": 0,
+"nombre": "Clockwork Night"
+},
+{
+"ids": [
+511002996
+],
+"max": 0,
+"nombre": "Imperial Order (Pre-Errata)"
+},
+{
+"ids": [
+511000638
+],
+"max": 0,
+"nombre": "Rainbow Snake Eingana"
+}
+],
+"Yami Marik": [
+{
+"ids": [
+43730887,
+511000164
+],
+"max": 0,
+"nombre": "Holding Arms"
+},
+{
+"ids": [
+405,
+21558682,
+511000248
+],
+"max": 0,
+"nombre": "Jam Defender"
+},
+{
+"ids": [
+44095762,
+513000001
+],
+"max": 0,
+"nombre": "Mirror Force"
+},
+{
+"ids": [
+529,
+511000163
+],
+"max": 1,
+"nombre": "Plasma Eel"
+},
+{
+"ids": [
+110000010,
+511027028,
+511600400,
+513000134
+],
+"max": 0,
+"nombre": "The Winged Dragon of Ra (VG)"
+}
+],
+"Kaiba (Manga)": [
+{
+"ids": [
+55410871,
+55410872,
+511013021
+],
+"max": 0,
+"nombre": "Blue-Eyes Chaos MAX Dragon"
+},
+{
+"ids": [
+22804410,
+511247010
+],
+"max": 0,
+"nombre": "Deep-Eyes White Dragon"
+},
+{
+"ids": [
+513000111
+],
+"max": 0,
+"nombre": "Final Attack Orders (Anime)"
+},
+{
+"ids": [
+77363314,
+511013022
+],
+"max": 1,
+"nombre": "Krystal Dragon"
+},
+{
+"ids": [
+110000011,
+511600398,
+513000135
+],
+"max": 0,
+"nombre": "Obelisk the Tormentor (VG)"
+},
+{
+"ids": [
+68005187,
+513000054
+],
+"max": 0,
+"nombre": "Soul Exchange"
+},
+{
+"ids": [
+54591086,
+513000122
+],
+"max": 0,
+"nombre": "Virus Cannon"
+}
+],
+"Kurosaki": [
+{
+"ids": [
+73347079
+],
+"max": 2,
+"nombre": "Raidraptor - Force Strix"
+},
+{
+"ids": [
+511002084
+],
+"max": 0,
+"nombre": "Raidraptor - Reversal"
+},
+{
+"ids": [
+86221741,
+511002079
+],
+"max": 0,
+"nombre": "Raidraptor - Ultimate Falcon"
+}
+],
+"Chazz": [
+{
+"ids": [
+511002977
+],
+"max": 0,
+"nombre": "Cemetery Change"
+},
+{
+"ids": [
+511000334
+],
+"max": 0,
+"nombre": "Direct Border"
+},
+{
+"ids": [
+511000613
+],
+"max": 0,
+"nombre": "Magical Mallet (Anime)"
+},
+{
+"ids": [
+39191307
+],
+"max": 1,
+"nombre": "Masked Dragon"
+},
+{
+"ids": [
+511005030
+],
+"max": 0,
+"nombre": "Ojamachine Yellow"
+}
+],
+"Mai": [
+{
+"ids": [
+85742772
+],
+"max": 0,
+"nombre": "Gravity Bind"
+},
+{
+"ids": [
+18144506,
+18144507,
+18144508
+],
+"max": 1,
+"nombre": "Harpie's Feather Duster"
+},
+{
+"ids": [
+513000002
+],
+"max": 0,
+"nombre": "Mirror Wall (Anime)"
+}
+],
+"Jack": [
+{
+"ids": [
+13764881,
+100000087
+],
+"max": 0,
+"nombre": "Chain Resonator"
+},
+{
+"ids": [
+511013006
+],
+"max": 0,
+"nombre": "Invalidate"
+},
+{
+"ids": [
+511002722
+],
+"max": 0,
+"nombre": "Red Gem"
+},
+{
+"ids": [
+513000013
+],
+"max": 0,
+"nombre": "Red Nova Dragon (Anime)"
+},
+{
+"ids": [
+80666118,
+511009051
+],
+"max": 0,
+"nombre": "Scarlight Red Dragon Archfiend"
+},
+{
+"ids": [
+16172067,
+511009049
+],
+"max": 0,
+"nombre": "Tyrant Red Dragon Archfiend"
+}
+],
+"Zane": [
+{
+"ids": [
+511002821,
+511003055
+],
+"max": 0,
+"nombre": "Armored Cybern (Anime)"
+},
+{
+"ids": [
+511002108
+],
+"max": 0,
+"nombre": "Chimeratech Overdragon (Anime)"
+},
+{
+"ids": [
+89719143,
+511003029,
+513000179
+],
+"max": 0,
+"nombre": "Final Fusion"
+},
+{
+"ids": [
+513000094
+],
+"max": 0,
+"nombre": "Future Fusion (Anime)"
+}
+],
+"Aigami": [
+{
+"ids": [
+30270176
+],
+"max": 1,
+"nombre": "Crimson Nova the Dark Cubic Lord"
+}
+],
+"Tron": [
+{
+"ids": [
+511002830
+],
+"max": 0,
+"nombre": "Number 40: Gimmick Puppet of Strings (Anime)"
+},
+{
+"ids": [
+9161357,
+511002090
+],
+"max": 0,
+"nombre": "Number 6: Chronomaly Atlandis"
+},
+{
+"ids": [
+513000141
+],
+"max": 0,
+"nombre": "Number 69: Heraldry Crest (Anime)"
+},
+{
+"ids": [
+48995978,
+511002600
+],
+"max": 0,
+"nombre": "Number 88: Gimmick Puppet of Leo"
+},
+{
+"ids": [
+1992816,
+511010009
+],
+"max": 0,
+"nombre": "Number 9: Dyson Sphere"
+}
+],
+"Alito": [
+{
+"ids": [
+57734012,
+513000008
+],
+"max": 0,
+"nombre": "Rank-Up-Magic - The Seventh One"
+}
+],
+"Team Ragnarok": [
+{
+"ids": [
+511000260
+],
+"max": 0,
+"nombre": "Loki, Lord of the Aesir (Anime)"
+},
+{
+"ids": [
+511000264
+],
+"max": 0,
+"nombre": "Odin, Father of the Aesir (Anime)"
+},
+{
+"ids": [
+511000247
+],
+"max": 0,
+"nombre": "Thor, Lord of the Aesir (Anime)"
+},
+{
+"ids": [
+17078030
+],
+"max": 0,
+"nombre": "Wall of Revealing Light"
+}
+],
+"Koyo": [
+{
+"ids": [
+95486586,
+513000024
+],
+"max": 0,
+"nombre": "Elemental HERO Core"
+}
+],
+"Alexis": [
+{
+"ids": [
+31557782
+],
+"max": 0,
+"nombre": "Ancient Gear"
+},
+{
+"ids": [
+4064925
+],
+"max": 0,
+"nombre": "Ancient Gear Advance"
+},
+{
+"ids": [
+10547580
+],
+"max": 0,
+"nombre": "Ancient Gear Ballista"
+},
+{
+"ids": [
+10509340
+],
+"max": 0,
+"nombre": "Ancient Gear Beast"
+},
+{
+"ids": [
+511001538
+],
+"max": 0,
+"nombre": "Ancient Gear Booster"
+},
+{
+"ids": [
+60953949
+],
+"max": 0,
+"nombre": "Ancient Gear Box"
+},
+{
+"ids": [
+80045583
+],
+"max": 0,
+"nombre": "Ancient Gear Cannon"
+},
+{
+"ids": [
+92001300
+],
+"max": 0,
+"nombre": "Ancient Gear Castle"
+},
+{
+"ids": [
+44052074
+],
+"max": 0,
+"nombre": "Ancient Gear Catapult"
+},
+{
+"ids": [
+27483935
+],
+"max": 0,
+"nombre": "Ancient Gear Commander"
+},
+{
+"ids": [
+64603182
+],
+"max": 0,
+"nombre": "Ancient Gear Dark Golem"
+},
+{
+"ids": [
+511009080
+],
+"max": 0,
+"nombre": "Ancient Gear Double Imitation"
+},
+{
+"ids": [
+75892194
+],
+"max": 0,
+"nombre": "Ancient Gear Dragon"
+},
+{
+"ids": [
+67829249
+],
+"max": 0,
+"nombre": "Ancient Gear Drill"
+},
+{
+"ids": [
+53541822
+],
+"max": 0,
+"nombre": "Ancient Gear Duel"
+},
+{
+"ids": [
+1953925
+],
+"max": 0,
+"nombre": "Ancient Gear Engineer"
+},
+{
+"ids": [
+4446672,
+511024009
+],
+"max": 0,
+"nombre": "Ancient Gear Explosive"
+},
+{
+"ids": [
+30435145
+],
+"max": 0,
+"nombre": "Ancient Gear Factory"
+},
+{
+"ids": [
+40830387
+],
+"max": 0,
+"nombre": "Ancient Gear Fist"
+},
+{
+"ids": [
+70147689
+],
+"max": 0,
+"nombre": "Ancient Gear Fortress"
+},
+{
+"ids": [
+1278431
+],
+"max": 0,
+"nombre": "Ancient Gear Frame"
+},
+{
+"ids": [
+64061284
+],
+"max": 0,
+"nombre": "Ancient Gear Fusion"
+},
+{
+"ids": [
+18486927
+],
+"max": 0,
+"nombre": "Ancient Gear Gadget"
+},
+{
+"ids": [
+86321248
+],
+"max": 0,
+"nombre": "Ancient Gear Gadjiltron Chimera"
+},
+{
+"ids": [
+50933533
+],
+"max": 0,
+"nombre": "Ancient Gear Gadjiltron Dragon"
+},
+{
+"ids": [
+83104731
+],
+"max": 0,
+"nombre": "Ancient Gear Golem"
+},
+{
+"ids": [
+95735217
+],
+"max": 0,
+"nombre": "Ancient Gear Golem - Ultimate Pound"
+},
+{
+"ids": [
+87182127,
+511009307
+],
+"max": 0,
+"nombre": "Ancient Gear Howitzer"
+},
+{
+"ids": [
+42878636,
+511001539
+],
+"max": 0,
+"nombre": "Ancient Gear Hunting Hound"
+},
+{
+"ids": [
+81269231
+],
+"max": 0,
+"nombre": "Ancient Gear Hydra"
+},
+{
+"ids": [
+511009333
+],
+"max": 0,
+"nombre": "Ancient Gear Inspection"
+},
+{
+"ids": [
+39303359
+],
+"max": 0,
+"nombre": "Ancient Gear Knight"
+},
+{
+"ids": [
+511009042
+],
+"max": 0,
+"nombre": "Ancient Gear Magic Shield"
+},
+{
+"ids": [
+511009561
+],
+"max": 0,
+"nombre": "Ancient Gear Mask"
+},
+{
+"ids": [
+37663536
+],
+"max": 0,
+"nombre": "Ancient Gear Megaton Golem"
+},
+{
+"ids": [
+44874522
+],
+"max": 0,
+"nombre": "Ancient Gear Reactor Dragon"
+},
+{
+"ids": [
+47482043,
+511001542
+],
+"max": 0,
+"nombre": "Ancient Gear Reborn"
+},
+{
+"ids": [
+511001541
+],
+"max": 0,
+"nombre": "Ancient Gear Reverse Fusion"
+},
+{
+"ids": [
+511002823
+],
+"max": 0,
+"nombre": "Ancient Gear Scrap Fusion"
+},
+{
+"ids": [
+56094445
+],
+"max": 0,
+"nombre": "Ancient Gear Soldier"
+},
+{
+"ids": [
+511001543
+],
+"max": 0,
+"nombre": "Ancient Gear Spark Shot"
+},
+{
+"ids": [
+32762201,
+500000006
+],
+"max": 0,
+"nombre": "Ancient Gear Statue"
+},
+{
+"ids": [
+37457534
+],
+"max": 0,
+"nombre": "Ancient Gear Tank"
+},
+{
+"ids": [
+91098230
+],
+"max": 0,
+"nombre": "Ancient Gear Tanker"
+},
+{
+"ids": [
+44052075
+],
+"max": 0,
+"nombre": "Ancient Gear Token"
+},
+{
+"ids": [
+59811955
+],
+"max": 0,
+"nombre": "Ancient Gear Workshop"
+},
+{
+"ids": [
+17663375
+],
+"max": 0,
+"nombre": "Ancient Gear Wyvern"
+},
+{
+"ids": [
+700000034
+],
+"max": 0,
+"nombre": "Chaos Ancient Gear Fusion"
+},
+{
+"ids": [
+51788412,
+700000028
+],
+"max": 0,
+"nombre": "Chaos Ancient Gear Giant"
+},
+{
+"ids": [
+99427357
+],
+"max": 1,
+"nombre": "Cyber Angel Natasha"
+},
+{
+"ids": [
+511001540
+],
+"max": 0,
+"nombre": "Double Ancient Gear Hunting Hound"
+},
+{
+"ids": [
+7171149
+],
+"max": 0,
+"nombre": "Toon Ancient Gear Golem"
+},
+{
+"ids": [
+511001544
+],
+"max": 0,
+"nombre": "Triple Ancient Gear Hunting Hound"
+},
+{
+"ids": [
+12652643,
+511027033
+],
+"max": 0,
+"nombre": "Ultimate Ancient Gear Golem"
+},
+{
+"ids": [
+511001726
+],
+"max": 0,
+"nombre": "Ultimate Ancient Gear Hunting Hound"
+},
+{
+"ids": [
+511009312
+],
+"max": 0,
+"nombre": "Unfinished Ancient Gear"
+}
+]
+}
+}
