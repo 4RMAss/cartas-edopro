@@ -49,7 +49,7 @@ URL_BASE = CHARS_URL[:-len("personajes.json")] if CHARS_URL.endswith("personajes
 SELF_PATH = os.path.abspath(__file__)
 UPDATE_MARK = SELF_PATH + ".actualizado"
 REJECTED = SELF_PATH + ".rechazada"  # huella de una versión que falló al arrancar (no se reinstala)
-VERSION = "3.0"
+VERSION = "3.1"
 TZ = timezone(timedelta(hours=int(os.environ.get("RANKING_TZ_HOURS", "-5"))))  # Lima
 KEEP_DAYS = int(os.environ.get("RANKING_KEEP_DAYS", "90"))
 MIN_PCT = int(os.environ.get("RANKING_MIN_PCT", "40"))  # parecido mínimo para asignar personaje
@@ -415,21 +415,53 @@ def parse_day(s, end=False):
     return d.timestamp()
 
 
+FORMAT_LABELS = {"liga": "Liga", "eliminacion": "Eliminación directa", "grupos": "Fase de grupos",
+                 "grupos+eliminacion": "Fase de grupos y eliminatoria"}
+
+
+def norm_format(f):
+    f = str(f or "").lower()
+    if "grup" in f and "elim" in f:
+        return "grupos+eliminacion"
+    if "grup" in f:
+        return "grupos"
+    if "elim" in f:
+        return "eliminacion"
+    return "liga"
+
+
+def slug(text):
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-") or "torneo"
+
+
 def tournaments_info():
     out = []
     for t in (load_json(TOURN, {}).get("torneos") or []):
         try:
             seeds = [str(p).strip() for p in t.get("participantes") or [] if str(p).strip()]
+            groups = {str(g): [str(p).strip() for p in members if str(p).strip()]
+                      for g, members in (t.get("grupos") or {}).items()}
+            everyone = seeds + [p for members in groups.values() for p in members if p not in seeds]
+            fmt = norm_format(t.get("formato"))
+            ko = t.get("inicio_eliminacion")
+            name = str(t.get("nombre") or "Torneo")
             out.append({
-                "name": str(t.get("nombre") or "Torneo"),
+                "name": name,
+                "id": slug(name) + "-" + str(t["inicio"]),
                 "start": parse_day(t["inicio"]),
                 "end": parse_day(t.get("fin") or t["inicio"], end=True),
                 "start_txt": t["inicio"], "end_txt": t.get("fin") or t["inicio"],
                 "seeds": seeds,
-                "players": {p.lower() for p in seeds},
+                "everyone": everyone,
+                "players": {p.lower() for p in everyone},
+                "groups": groups,
+                "qualify": max(1, int(t.get("clasifican") or 2)),
+                "ko_start": parse_day(ko) if ko else None,
+                "ko_txt": ko or "",
                 "champion": str(t.get("campeon") or "").strip(),
                 "bonus": float(t.get("bono_campeon") or 0),
-                "format": "eliminacion" if str(t.get("formato", "")).lower().startswith("elim") else "liga",
+                "format": fmt,
+                "label": str(t.get("tipo") or FORMAT_LABELS[fmt]),
                 "bo": max(1, int(t.get("al_mejor_de") or 1)),
             })
         except Exception as exc:
@@ -526,6 +558,12 @@ def stats(duels, start=None, end=None):
     for t in tours:
         t["table"] = {}
         t["pairs"] = Counter()
+        t["gtables"] = {g: {} for g in t["groups"]}
+        for p in t["everyone"]:
+            row(t["table"], p.lower(), p)
+        for g, members in t["groups"].items():
+            for p in members:
+                row(t["gtables"][g], p.lower(), p)
     for ts, kind, d in events:
         if kind == 1:  # bono al campeón al terminar el torneo
             if ts <= time.time():
@@ -572,8 +610,25 @@ def stats(duels, start=None, end=None):
                     tr = row(d["tour"]["table"], k, name)
                     tr["spell"][name] += 1
                     tr[result] += 1
-        if d["tour"] and len(keys[0]) == 1 and len(keys[1]) == 1 and d["final"] in (0, 1):
-            d["tour"]["pairs"][(keys[0][0], keys[1][0]) if d["final"] == 0 else (keys[1][0], keys[0][0])] += 1
+        t = d["tour"]
+        if t:
+            group_phase = t["format"] in ("grupos", "grupos+eliminacion") and (
+                t["ko_start"] is None or d["ts"] < t["ko_start"])
+            d["phase"] = ""
+            if group_phase:
+                g = next((g for g, m in t["groups"].items() if everyone <= {p.lower() for p in m}), None)
+                if g is not None:
+                    d["phase"] = f"Grupo {g}"
+                    for s_ in (0, 1):
+                        result = "d" if d["final"] == 2 else ("w" if d["final"] == s_ else "l")
+                        for name, k in zip(d["team" + str(s_)], keys[s_]):
+                            gr = row(t["gtables"][g], k, name)
+                            gr["spell"][name] += 1
+                            gr[result] += 1
+            elif t["format"] in ("eliminacion", "grupos+eliminacion"):
+                d["phase"] = "Eliminatoria"
+                if len(keys[0]) == 1 and len(keys[1]) == 1 and d["final"] in (0, 1):
+                    t["pairs"][(keys[0][0], keys[1][0]) if d["final"] == 0 else (keys[1][0], keys[0][0])] += 1
 
     def finish(table, by_points=True):
         rows = list(table.values())
@@ -609,8 +664,14 @@ def stats(duels, start=None, end=None):
     for t in tours:
         t["rows"] = finish(t["table"], by_points=False)
         t["state"] = "Próximo" if now < t["start"] else ("En curso" if now < t["end"] else "Terminado")
+        t["group_rows"] = {g: finish(gt, by_points=False) for g, gt in t["gtables"].items()}
+        seeds = None
         if t["format"] == "eliminacion":
-            t["bracket"], champ = bracket(t)
+            seeds = list(t["seeds"])
+        elif t["format"] == "grupos+eliminacion":
+            seeds = ko_seeds(t, now)
+        if seeds is not None:
+            t["bracket"], champ = bracket(t, seeds)
             if champ and not t["champion"]:
                 t["auto_champion"] = champ
     shown = [t for t in tours if (end is None or t["start"] < end) and (start is None or t["end"] > start)]
@@ -620,10 +681,37 @@ def stats(duels, start=None, end=None):
 BYE = ""  # lugar vacío en las llaves (pasa directo el otro)
 
 
-def bracket(t):
-    """Llaves de eliminación: los participantes se emparejan en el orden escrito (1 vs 2, 3 vs 4...).
-    Gana cada llave quien llegue antes a las victorias necesarias (al mejor de N) en sus duelos del torneo."""
-    seeds = list(t["seeds"])
+def ko_seeds(t, now):
+    """Clasificados de la fase de grupos a la eliminatoria. Con 2 por grupo se cruzan: 1.º A vs 2.º B,
+    1.º B vs 2.º A... Mientras no empiece la eliminatoria, los lugares salen como «Por definir»."""
+    names = list(t["groups"])
+    n = t["qualify"]
+    total = n * len(names)
+    if t["ko_start"] is None or now < t["ko_start"]:
+        return [None] * max(2, total)
+    q = {g: [r["name"] for r in t["group_rows"][g]][:n] for g in names}
+    for g in names:
+        q[g] += [None] * (n - len(q[g]))
+    if n == 2 and len(names) % 2 == 0:
+        top, bottom = [], []
+        for i in range(0, len(names), 2):
+            a, b = names[i], names[i + 1]
+            top += [q[a][0], q[b][1]]
+            bottom += [q[b][0], q[a][1]]
+        return top + bottom
+    order = [q[g][pos] for pos in range(n) for g in names]
+    slots = []
+    while order:
+        slots.append(order.pop(0))
+        if order:
+            slots.append(order.pop())
+    return slots
+
+
+def bracket(t, seeds):
+    """Llaves de eliminación: se emparejan en el orden dado (1 vs 2, 3 vs 4...). Gana cada llave quien
+    llegue antes a las victorias necesarias (al mejor de N) en sus duelos de eliminatoria."""
+    seeds = list(seeds)
     size = 1
     while size < max(2, len(seeds)):
         size *= 2
@@ -722,6 +810,14 @@ padding:4px 10px;font-size:.85rem;color:#c9d3f2;text-decoration:none}.tabs a.on{
 .usage .lbl{width:150px;flex-shrink:0}.usage .b{height:14px;background:#5b4bb0;border-radius:4px}
 .dl{font-size:.78rem;margin-left:6px;white-space:nowrap}
 svg.chart{width:100%;height:auto;background:#171c2e;border-radius:10px}
+.picker{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
+.picker select{background:#171c2e;color:#e8ecf5;border:1px solid #3c4878;border-radius:8px;padding:7px 10px;font-size:.92rem}
+details.tours{background:#171c2e;border-radius:10px;padding:4px 10px;margin:6px 0}
+details.tours summary{cursor:pointer;padding:8px 0;font-weight:700;color:#ffd56b}
+.titem{display:block;padding:8px 2px;border-top:1px solid #232a42;color:#e8ecf5;text-decoration:none}
+.titem b{color:#ffe9a8}.live{background:#3a3216;border-radius:10px;padding:8px 10px;margin:6px 0;display:block;
+color:#ffe9a8;text-decoration:none}
+.groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
 """
 
 
@@ -777,7 +873,8 @@ def duel_line(d, period=None):
     meta = html.escape(" · ".join([fmt_ts(d["ts"])] + extra))
     if replay_exists(d["file"]):
         meta += f' <a class="dl" href="/replay/{html.escape(d["file"])}" download>⬇ Repetición</a>'
-    tour = f' <span class="tour">🏆 {html.escape(d["tour"]["name"])}</span>' if d.get("tour") else ""
+    tour = (f' <a class="tour" style="text-decoration:none" href="/torneo{q(id=d["tour"]["id"])}">🏆 '
+            f'{html.escape(d["tour"]["name"])}</a>' if d.get("tour") else "")
     warns = []
     for side in (0, 1):
         for name, bad in zip(d["team" + str(side)], d.get("nerf", [[], []])[side]):
@@ -874,26 +971,84 @@ def bracket_html(t):
     return f'<div class="bracket">{"".join(cols)}</div>'
 
 
-def tournament_html(t):
-    champ = t["champion"] or t.get("auto_champion") or (
-        t["rows"][0]["name"] if t["state"] == "Terminado" and t["rows"] and t["format"] == "liga" else "")
-    fmt = (f"Eliminación directa, al mejor de {t['bo']}" if t["format"] == "eliminacion" else "Liga")
-    info = f'{t["start_txt"]} al {t["end_txt"]} · {fmt} · {t["state"]}'
+def tour_champion(t):
+    return t["champion"] or t.get("auto_champion") or (
+        t["rows"][0]["name"] if t["state"] == "Terminado" and t["rows"] and t["format"] == "liga"
+        and t["rows"][0]["total"] else "")
+
+
+def tour_summary(t):
+    info = f'{t["label"]} · {t["start_txt"]} al {t["end_txt"]} · {t["state"]}'
+    champ = tour_champion(t)
     if champ:
         info += f" · Campeón: {champ}"
-        if t["champion"] and t["bonus"]:
-            info += f" (+{round(t['bonus'])} puntos)"
-    if t["format"] == "eliminacion":
-        body = bracket_html(t)
-    elif t["rows"]:
-        head = '<tr><th>#</th><th>Jugador</th><th>Pts</th><th>V</th><th>D</th><th>E</th><th>Duelos</th></tr>'
-        trs = "".join(f'<tr class="top{i}"><td>{i}</td><td class="n">{html.escape(s["name"])}</td>'
-                      f'<td class="p">{s["tpts"]}</td><td>{s["w"]}</td><td>{s["l"]}</td><td>{s["d"]}</td>'
-                      f'<td>{s["total"]}</td></tr>' for i, s in enumerate(t["rows"], 1))
-        body = f"<table>{head}{trs}</table>"
-    else:
-        body = '<p class="sub">Todavía no hay duelos de este torneo.</p>'
-    return f'<h3 style="margin:1em 0 .2em">🏆 {html.escape(t["name"])}</h3><p class="sub">{html.escape(info)}</p>{body}'
+    return info
+
+
+def league_table(rows, qualify=0):
+    if not rows:
+        return '<p class="sub">Sin participantes.</p>'
+    head = '<tr><th>#</th><th>Jugador</th><th>Pts</th><th>V</th><th>D</th><th>E</th><th>Duelos</th></tr>'
+    trs = "".join(f'<tr class="top{i}"><td>{i}{" ✓" if qualify and i <= qualify else ""}</td>'
+                  f'<td class="n">{html.escape(r["name"])}</td><td class="p">{r["tpts"]}</td><td>{r["w"]}</td>'
+                  f'<td>{r["l"]}</td><td>{r["d"]}</td><td>{r["total"]}</td></tr>' for i, r in enumerate(rows, 1))
+    return f"<table>{head}{trs}</table>"
+
+
+def tournament_body(t):
+    parts = []
+    if t["format"] in ("grupos", "grupos+eliminacion"):
+        q = t["qualify"] if t["format"] == "grupos+eliminacion" else 0
+        boxes = "".join(f'<div><h3 style="margin:.4em 0">Grupo {html.escape(g)}</h3>{league_table(rows, q)}</div>'
+                        for g, rows in t["group_rows"].items())
+        note = (f'<p class="sub">✓ = clasifica a la eliminatoria ({q} por grupo).</p>' if q else "")
+        parts.append(f'<h2>Fase de grupos</h2>{note}<div class="groups">{boxes}</div>')
+    if t["format"] in ("eliminacion", "grupos+eliminacion"):
+        when = (f' <span class="muted">(desde el {html.escape(t["ko_txt"])})</span>'
+                if t["format"] == "grupos+eliminacion" and t["ko_txt"] else "")
+        parts.append(f'<h2>Eliminatoria{when}</h2><p class="sub">Al mejor de {t["bo"]}: pasa quien gane '
+                     f'{t["bo"] // 2 + 1} duelo(s) primero.</p>{bracket_html(t)}')
+    if t["format"] == "liga":
+        parts.append(f'<h2>Tabla</h2><p class="sub">3 puntos por victoria y 1 por empate.</p>{league_table(t["rows"])}')
+    return "".join(parts)
+
+
+def tournaments_list_html(tours):
+    if not tours:
+        return '<p class="sub">Todavía no hay torneos. 4RMAss los anuncia aquí cuando los organiza.</p>'
+    ordered = sorted(tours, key=lambda t: -t["start"])
+    live = "".join(f'<a class="live" href="/torneo{q(id=t["id"])}">🔴 En curso: <b>{html.escape(t["name"])}</b>'
+                   f'<div class="muted">{html.escape(tour_summary(t))}</div></a>'
+                   for t in ordered if t["state"] == "En curso")
+    items = "".join(f'<a class="titem" href="/torneo{q(id=t["id"])}">🏆 <b>{html.escape(t["name"])}</b>'
+                    f'<div class="muted">{html.escape(tour_summary(t))}</div></a>' for t in ordered)
+    return (f'{live}<details class="tours"><summary>Ver todos los torneos ({len(ordered)}) · del más '
+            f'reciente al primero</summary>{items}</details>')
+
+
+def render_tournament(params):
+    tid = (params.get("id") or [""])[0]
+    duels = load_duels()
+    _p, _c, tours = stats(duels)
+    t = next((x for x in tours if x["id"] == tid), None)
+    back = '<p><a href="/">← Volver al ranking</a></p>'
+    if not t:
+        return page(f'{back}<p>No existe ese torneo.</p>', "Torneo · " + TITLE)
+    mine = sorted((d for d in duels if d.get("tour") is t), key=lambda d: -d["ts"])
+    def phase(d):
+        return f'<div class="muted">{html.escape(d["phase"])}</div>' if d.get("phase") else ""
+
+    dl = ("".join(f'<div class="duel">{phase(d)}{duel_line(d, "todo")}</div>' for d in mine)
+          or '<p class="sub">Todavía no hay duelos.</p>')
+    bonus = f" (+{round(t['bonus'])} puntos de bono)" if t["champion"] and t["bonus"] else ""
+    body = f"""{back}<h1>🏆 {html.escape(t["name"])}</h1>
+<p class="sub">{html.escape(tour_summary(t))}{html.escape(bonus)}</p>
+<p class="sub">Participantes: {html.escape(", ".join(t["everyone"]) or "—")}. Los duelos del torneo valen el doble
+en la tabla general.</p>
+{tournament_body(t)}
+<h2>Duelos del torneo</h2>{dl}
+<footer>v{VERSION}</footer>"""
+    return page(body, t["name"] + " · " + TITLE)
 
 
 def favorites_html(players, chars, hp, hc):
@@ -955,15 +1110,20 @@ upd();
 
 
 def tabs_html(duels, current, path="/", extra=None):
+    """Selector compacto de temporada (lista desplegable)."""
     items = []
     for year, sems in seasons(duels):
         for k in sems:
             items.append((k, period_label(k)))
-        items.append((year, f"Temporada {year}"))
-    items.append(("todo", "Histórico"))
-    links = "".join(f'<a class="{"on" if k == current else ""}" href="{path}{q(t=k, **(extra or {}))}">'
-                    f'{html.escape(lbl)}</a>' for k, lbl in items)
-    return f'<div class="tabs">{links}</div>'
+        items.append((year, f"Temporada {year} (año completo)"))
+    items.append(("todo", "Histórico (todo)"))
+    opts = "".join(f'<option value="{html.escape(k)}"{" selected" if k == current else ""}>{html.escape(lbl)}</option>'
+                   for k, lbl in items)
+    hidden = "".join(f'<input type="hidden" name="{html.escape(k)}" value="{html.escape(v)}">'
+                     for k, v in (extra or {}).items())
+    return (f'<form class="picker" method="get" action="{path}">{hidden}<span class="muted">Temporada:</span>'
+            f'<select name="t" onchange="this.form.submit()">{opts}</select>'
+            f'<noscript><button>Ver</button></noscript></form>')
 
 
 def seasons_html(duels):
@@ -992,19 +1152,16 @@ def render_public(params):
     duels = load_duels()
     key = period_key((params.get("t") or [""])[0])
     a, b = period_bounds(key)
-    players, chars, tours = stats(duels, a, b)
+    _p, _c, all_tours = stats(duels)  # torneos con todos sus duelos (antes de la temporada elegida)
+    players, chars, _tours = stats(duels, a, b)
     hp, hc = head_to_head(duels)
     period_duels = [d for d in duels if not d["annulled"] and not d["self"]
                     and (a is None or d["ts"] >= a) and (b is None or d["ts"] < b)]
     duel_html = ("".join(f'<div class="duel">{duel_line(d, key)}</div>' for d in period_duels[:20])
                  or '<p class="sub">—</p>')
-    tours_html = ""
-    if tours:
-        order = {"En curso": 0, "Próximo": 1, "Terminado": 2}
-        tours_sorted = sorted(tours, key=lambda t: (order[t["state"]], -t["start"]))
-        tours_html = ('<h2>Torneos</h2><p class="sub">Liga: 3 puntos por victoria y 1 por empate. Eliminación: '
-                      'pasa quien llegue antes a las victorias necesarias. Los duelos de torneo también suman, '
-                      'el doble, a la tabla general.</p>' + "".join(tournament_html(t) for t in tours_sorted))
+    tours_html = ('<h2>Torneos</h2><p class="sub">Toca un torneo para ver su tabla, sus grupos o sus llaves. '
+                  'Los duelos de torneo también suman, el doble, a la tabla general.</p>'
+                  + tournaments_list_html(all_tours))
     body = f"""<h1>🏆 Ranking · {TITLE}</h1>
 <p class="sub">Cada temporada es un año con 2 semestres: los puntos empiezan de cero en cada semestre y en cada
 temporada. Estás viendo: <b>{html.escape(period_label(key))}</b>.</p>
@@ -1193,6 +1350,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(render_public(params))
         elif path == "/jugador":
             self.send_html(render_player(params))
+        elif path == "/torneo":
+            self.send_html(render_tournament(params))
         elif path.startswith("/replay/"):
             self.send_replay(path[len("/replay/"):])
         elif path == "/admin":

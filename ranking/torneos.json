@@ -1,13 +1,26 @@
 {
- "_ayuda": "Torneos. Cuentan los duelos entre participantes jugados entre 'inicio' y 'fin' (fechas de Lima, ambos días incluidos). Esos duelos valen el doble en los puntos. 'campeon' y 'bono_campeon' son opcionales: el bono se suma a los puntos del campeón al terminar el torneo.",
+ "_ayuda": "Torneos. Cuentan los duelos entre participantes jugados entre 'inicio' y 'fin' (fechas de Lima, ambos días incluidos) y valen el doble en los puntos. 'formato': 'liga' (tabla, 3 puntos por victoria), 'eliminacion' (llaves en el orden de 'participantes': 1 vs 2, 3 vs 4...), 'grupos' (una tabla por grupo, en 'grupos') o 'grupos+eliminacion' (grupos y luego llaves con los 'clasifican' primeros de cada grupo, desde la fecha 'inicio_eliminacion'). 'al_mejor_de': 1 o 3 en las llaves. 'tipo' es opcional: el nombre del formato que se muestra (p. ej. 'Suizo'). 'campeon' y 'bono_campeon' son opcionales.",
  "ejemplo": {
   "nombre": "Copa de ejemplo",
+  "tipo": "",
+  "formato": "grupos+eliminacion",
   "inicio": "2026-12-01",
-  "fin": "2026-12-03",
-  "participantes": [
-   "Jugador1",
-   "Jugador2"
-  ],
+  "fin": "2026-12-07",
+  "grupos": {
+   "A": [
+    "Jugador1",
+    "Jugador2",
+    "Jugador3"
+   ],
+   "B": [
+    "Jugador4",
+    "Jugador5",
+    "Jugador6"
+   ]
+  },
+  "clasifican": 2,
+  "inicio_eliminacion": "2026-12-05",
+  "al_mejor_de": 3,
   "campeon": "",
   "bono_campeon": 0
  },
