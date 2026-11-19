@@ -18,6 +18,7 @@ IMAGEN=dyxel/multirole:latest
 PUERTO_DUELO=7911
 PUERTO_LISTA=7922
 PUERTO_WEBHOOK_CARTAS=45454
+PUERTO_RANKING=7920
 
 msg()   { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 error() { printf '\n\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
@@ -35,7 +36,7 @@ ARQ="$(uname -m)"
 [ "$ARQ" = "x86_64" ] || error "Esta máquina es $ARQ. La imagen de Multirole sólo existe para x86_64: crea la instancia con la forma VM.Standard.E2.1.Micro (AMD), no con Ampere (ARM)."
 
 # ---------------------------------------------------------------------
-msg "1/6 Memoria de intercambio (la máquina gratuita sólo tiene 1 GB de RAM)"
+msg "1/7 Memoria de intercambio (la máquina gratuita sólo tiene 1 GB de RAM)"
 if ! swapon --show | grep -q .; then
   fallocate -l 2G /swapfile
   chmod 600 /swapfile
@@ -48,7 +49,7 @@ else
 fi
 
 # ---------------------------------------------------------------------
-msg "2/6 Instalando Docker"
+msg "2/7 Instalando Docker"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq docker.io curl openssl cron >/dev/null
@@ -56,7 +57,7 @@ systemctl enable --now docker >/dev/null 2>&1 || true
 systemctl enable --now cron   >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------------
-msg "3/6 Ajustes de red recomendados por Multirole"
+msg "3/7 Ajustes de red recomendados por Multirole"
 cat > /etc/sysctl.d/99-multirole.conf <<'EOF'
 # Detectar antes las conexiones muertas (recomendación del README de Multirole)
 net.ipv4.tcp_keepalive_time = 60
@@ -66,8 +67,8 @@ EOF
 sysctl --system >/dev/null
 
 # Las imágenes de Ubuntu de Oracle traen un cortafuegos que rechaza todo
-# menos SSH. Abrimos los dos puertos del juego.
-for p in "$PUERTO_DUELO" "$PUERTO_LISTA"; do
+# menos SSH. Abrimos los dos puertos del juego y el de la página del ranking.
+for p in "$PUERTO_DUELO" "$PUERTO_LISTA" "$PUERTO_RANKING"; do
   iptables -C INPUT -p tcp --dport "$p" -j ACCEPT 2>/dev/null \
     || iptables -I INPUT 1 -p tcp --dport "$p" -j ACCEPT
 done
@@ -78,8 +79,8 @@ elif [ -d /etc/iptables ]; then
 fi
 
 # ---------------------------------------------------------------------
-msg "4/6 Configuración de Multirole"
-mkdir -p "$DIR"
+msg "4/7 Configuración de Multirole"
+mkdir -p "$DIR" "$DIR/replays"
 tok() { openssl rand -hex 16; }
 T_SCRIPTS=$(tok); T_DBS=$(tok); T_LFL=$(tok); T_BIN=$(tok); T_CARTAS=$(tok)
 
@@ -127,7 +128,7 @@ cat > "$DIR/config.json" <<EOF
     },
     "roomLogging": { "enabled": false, "path": "./room-logs/" }
   },
-  "replayManager": { "save": false, "path": "./replays/" }
+  "replayManager": { "save": true, "path": "./replays/" }
 }
 EOF
 chmod 600 "$DIR/config.json"
@@ -147,7 +148,7 @@ EOF
 chmod 644 /etc/cron.d/multirole
 
 # ---------------------------------------------------------------------
-msg "5/6 Descargando y arrancando Multirole (la primera vez tarda varios minutos)"
+msg "5/7 Descargando y arrancando Multirole (la primera vez tarda varios minutos)"
 docker pull -q "$IMAGEN" >/dev/null
 docker rm -f multirole >/dev/null 2>&1 || true
 docker run -d --name multirole \
@@ -155,10 +156,47 @@ docker run -d --name multirole \
   --network host \
   --ulimit nofile=65536:65536 \
   -v "$DIR/config.json:/multirole/config.json:ro" \
+  -v "$DIR/replays:/multirole/replays" \
   "$IMAGEN" >/dev/null
 
 # ---------------------------------------------------------------------
-msg "6/6 Comprobando"
+msg "6/7 Ranking de victorias (página web en el puerto $PUERTO_RANKING)"
+RAW_BASE="https://raw.githubusercontent.com/${REPO_CARTAS#https://github.com/}/main"
+mkdir -p /opt/ranking
+if curl -fsSL "$RAW_BASE/ranking/ranking.py" -o /opt/ranking/ranking.py.nuevo; then
+  mv /opt/ranking/ranking.py.nuevo /opt/ranking/ranking.py
+  if [ ! -s /opt/ranking/admin_password.txt ]; then
+    openssl rand -hex 5 > /opt/ranking/admin_password.txt
+  fi
+  chmod 600 /opt/ranking/admin_password.txt
+  cat > /etc/systemd/system/ranking.service <<SERVICIO
+[Unit]
+Description=Ranking de Anime Server by 4RMAss
+After=network-online.target docker.service
+
+[Service]
+Environment=RANKING_REPLAYS=$DIR/replays
+Environment=RANKING_DB=/opt/ranking/ranking.db
+Environment=RANKING_PORT=$PUERTO_RANKING
+Environment=RANKING_PASSFILE=/opt/ranking/admin_password.txt
+ExecStart=/usr/bin/python3 /opt/ranking/ranking.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+SERVICIO
+  systemctl daemon-reload
+  systemctl enable ranking >/dev/null 2>&1 || true
+  systemctl restart ranking
+  RANKING_OK=1
+else
+  rm -f /opt/ranking/ranking.py.nuevo
+  echo "No se pudo descargar ranking/ranking.py de tu repositorio; el ranking queda sin instalar."
+fi
+
+# ---------------------------------------------------------------------
+msg "7/7 Comprobando"
 IP_PUBLICA="$(curl -fsS --max-time 10 https://api.ipify.org || echo 'TU_IP_PUBLICA')"
 printf 'Esperando a que descargue las cartas y abra los puertos'
 for _ in $(seq 1 90); do
@@ -182,13 +220,18 @@ cat <<EOF
   Puerto de salas:       $PUERTO_LISTA
   Repo de cartas:        $REPO_CARTAS
 
-  Recuerda abrir los puertos $PUERTO_DUELO y $PUERTO_LISTA (TCP) también en la
+  Ranking:               http://$IP_PUBLICA:$PUERTO_RANKING
+  Administrar ranking:   http://$IP_PUBLICA:$PUERTO_RANKING/admin
+  Clave de admin:        $( [ "${RANKING_OK:-0}" = 1 ] && cat /opt/ranking/admin_password.txt || echo "(ranking no instalado)")
+
+  Recuerda abrir los puertos $PUERTO_DUELO-$PUERTO_LISTA (TCP) también en la
   "Security List" de la red de Oracle, o nadie podrá entrar.
 
   Comandos útiles:
     sudo actualizar-cartas               recargar tus cartas ya mismo
     sudo docker logs --tail 50 multirole ver el registro
     sudo docker restart multirole        reiniciar el servidor
+    sudo cat /opt/ranking/admin_password.txt   ver la clave de admin del ranking
 
   Pega esto en config/user_configs.json de cada EDOPro:
 {
