@@ -1,5 +1,5 @@
 {
- "_ayuda": "Torneos. Cuentan los duelos entre participantes jugados entre 'inicio' y 'fin' (fechas de Lima, ambos días incluidos) y valen el doble en los puntos. 'formato': 'liga' (tabla, 3 puntos por victoria), 'eliminacion' (llaves en el orden de 'participantes': 1 vs 2, 3 vs 4...), 'grupos' (una tabla por grupo, en 'grupos') o 'grupos+eliminacion' (grupos y luego llaves con los 'clasifican' primeros de cada grupo, desde la fecha 'inicio_eliminacion'). 'al_mejor_de': 1 o 3 en las llaves. 'tipo' es opcional: el nombre del formato que se muestra (p. ej. 'Suizo'). 'campeon' y 'bono_campeon' son opcionales.",
+ "_ayuda": "Torneos. Cuentan los duelos entre participantes jugados entre 'inicio' y 'fin' (fechas de Lima, ambos días incluidos) y valen el doble en los puntos. 'categoria': el apartado donde sale en la página (p. ej. 'Torneos Fun', '2vs2', 'Liga Anime'). 'formato': 'liga' (tabla, 3 puntos por victoria), 'eliminacion' (llaves en el orden de 'participantes': 1 vs 2, 3 vs 4...), 'grupos' (una tabla por grupo, en 'grupos') o 'grupos+eliminacion' (grupos y luego llaves con los 'clasifican' primeros de cada grupo, desde la fecha 'inicio_eliminacion'). Para torneos 2vs2 (tag) cada participante es un equipo escrito con &, p. ej. 'Sky&Syrus'. 'al_mejor_de': 1 o 3 en las llaves. 'tipo' es opcional: el nombre del formato que se muestra (p. ej. 'Suizo'). 'campeon' y 'bono_campeon' son opcionales.",
  "ejemplo": {
   "nombre": "Copa de ejemplo",
   "tipo": "",
@@ -22,7 +22,22 @@
   "inicio_eliminacion": "2026-12-05",
   "al_mejor_de": 3,
   "campeon": "",
-  "bono_campeon": 0
+  "bono_campeon": 0,
+  "categoria": "Torneos Fun"
  },
- "torneos": []
+ "torneos": [],
+ "ejemplo_2vs2": {
+  "nombre": "Copa Tag de ejemplo",
+  "categoria": "2vs2",
+  "formato": "eliminacion",
+  "inicio": "2026-12-10",
+  "fin": "2026-12-12",
+  "participantes": [
+   "Sky&Syrus",
+   "4RMAss&Kaiser",
+   "Hiro&Badguy",
+   "SrVasilante&Hiro2"
+  ],
+  "al_mejor_de": 1
+ }
 }

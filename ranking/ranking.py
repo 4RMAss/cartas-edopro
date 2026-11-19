@@ -9,7 +9,7 @@ con un personaje débil contra uno fuerte vale más. Los torneos se definen en t
 Desde /admin, 4RMAss puede anular un resultado o cambiar el ganador.
 
 tiers.json, torneos.json, personajes.json y este mismo programa se actualizan solos desde el
-repositorio de GitHub cada 30 minutos. nerfeos.json (sacado de las banlists por personaje) sirve
+repositorio de GitHub cada 10 minutos. nerfeos.json (sacado de las banlists por personaje) sirve
 para avisar de los duelos en que alguien usó cartas nerfeadas para su personaje.
 
 Solo usa la biblioteca estándar de Python 3.
@@ -51,7 +51,7 @@ URL_BASE = CHARS_URL[:-len("personajes.json")] if CHARS_URL.endswith("personajes
 SELF_PATH = os.path.abspath(__file__)
 UPDATE_MARK = SELF_PATH + ".actualizado"
 REJECTED = SELF_PATH + ".rechazada"  # huella de una versión que falló al arrancar (no se reinstala)
-VERSION = "3.2"
+VERSION = "3.3"
 TZ = timezone(timedelta(hours=int(os.environ.get("RANKING_TZ_HOURS", "-5"))))  # Lima
 KEEP_DAYS = int(os.environ.get("RANKING_KEEP_DAYS", "90"))
 MIN_PCT = int(os.environ.get("RANKING_MIN_PCT", "40"))  # parecido mínimo para asignar personaje
@@ -254,7 +254,7 @@ def updater():
                 update_self()
             except Exception as exc:
                 print("No se pudo actualizar ranking.py:", exc, flush=True)
-        time.sleep(1800)
+        time.sleep(600)
 
 
 def load_json(path, default):
@@ -457,18 +457,36 @@ def slug(text):
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-") or "torneo"
 
 
+def split_team(entry):
+    """«Sky&Syrus» o «Kaiser & Coco» -> ['Sky', 'Syrus']."""
+    return [p.strip() for p in re.split(r"\s*&\s*", str(entry)) if p.strip()]
+
+
 def tournaments_info():
     out = []
     amap = alias_map()
     for t in (load_json(TOURN, {}).get("torneos") or []):
         try:
-            seeds = [canon(str(p).strip(), amap) for p in t.get("participantes") or [] if str(p).strip()]
-            groups = {str(g): [canon(str(p).strip(), amap) for p in members if str(p).strip()]
+            unit_of = {}   # frozenset(miembros en minúsculas) -> nombre del jugador o del equipo
+            members_of = {}
+
+            def unit(entry):
+                members = [canon(m, amap) for m in split_team(entry)]
+                if not members:
+                    return None
+                disp = "&".join(members)
+                unit_of[frozenset(m.lower() for m in members)] = disp
+                members_of[disp] = members
+                return disp
+
+            seeds = [u for u in (unit(p) for p in t.get("participantes") or []) if u]
+            groups = {str(g): [u for u in (unit(p) for p in members) if u]
                       for g, members in (t.get("grupos") or {}).items()}
-            everyone = seeds + [p for members in groups.values() for p in members if p not in seeds]
+            units = seeds + [u for members in groups.values() for u in members if u not in seeds]
             fmt = norm_format(t.get("formato"))
             ko = t.get("inicio_eliminacion")
             name = str(t.get("nombre") or "Torneo")
+            label = str(t.get("tipo") or FORMAT_LABELS[fmt])
             out.append({
                 "name": name,
                 "id": slug(name) + "-" + str(t["inicio"]),
@@ -476,8 +494,10 @@ def tournaments_info():
                 "end": parse_day(t.get("fin") or t["inicio"], end=True),
                 "start_txt": t["inicio"], "end_txt": t.get("fin") or t["inicio"],
                 "seeds": seeds,
-                "everyone": everyone,
-                "players": {p.lower() for p in everyone},
+                "everyone": units,
+                "unit_of": unit_of,
+                "teams": any(len(m) > 1 for m in members_of.values()),
+                "players": {m.lower() for ms in members_of.values() for m in ms},
                 "groups": groups,
                 "qualify": max(1, int(t.get("clasifican") or 2)),
                 "ko_start": parse_day(ko) if ko else None,
@@ -485,7 +505,8 @@ def tournaments_info():
                 "champion": canon(str(t.get("campeon") or "").strip(), amap),
                 "bonus": float(t.get("bono_campeon") or 0),
                 "format": fmt,
-                "label": str(t.get("tipo") or FORMAT_LABELS[fmt]),
+                "label": label,
+                "category": str(t.get("categoria") or "").strip() or label,
                 "bo": max(1, int(t.get("al_mejor_de") or 1)),
             })
         except Exception as exc:
@@ -583,8 +604,8 @@ def stats(duels, start=None, end=None):
         t["table"] = {}
         t["pairs"] = Counter()
         t["gtables"] = {g: {} for g in t["groups"]}
-        for p in t["everyone"]:
-            row(t["table"], p.lower(), p)
+        for u in t["everyone"]:
+            row(t["table"], u.lower(), u)
         for g, members in t["groups"].items():
             for p in members:
                 row(t["gtables"][g], p.lower(), p)
@@ -598,8 +619,9 @@ def stats(duels, start=None, end=None):
             continue
         keys = [[n.lower() for n in d["team" + str(s)]] for s in (0, 1)]
         everyone = set(keys[0]) | set(keys[1])
-        d["tour"] = next((t for t in tours if t["start"] <= d["ts"] < t["end"] and t["players"]
-                          and everyone <= t["players"]), None)
+        sides = [frozenset(keys[0]), frozenset(keys[1])]
+        d["tour"] = next((t for t in tours if t["start"] <= d["ts"] < t["end"]
+                          and sides[0] in t["unit_of"] and sides[1] in t["unit_of"]), None)
         k_factor = K_BASE * (K_TOURNAMENT if d["tour"] else 1)
         r0 = 0.5 if d["final"] == 2 else (1.0 if d["final"] == 0 else 0.0)
         side_chars = [[c for c, _p in d["chars"][s]] for s in (0, 1)]
@@ -630,29 +652,31 @@ def stats(duels, start=None, end=None):
                     cr["spell"][c] += 1
                     cr[result] += 1
                     cr["pts"] = char_pts(c) + (0 if same else sign * cdelta)
-                if d["tour"]:
-                    tr = row(d["tour"]["table"], k, name)
-                    tr["spell"][name] += 1
-                    tr[result] += 1
         t = d["tour"]
         if t:
+            units = [t["unit_of"][sides[0]], t["unit_of"][sides[1]]]
+            ures = ["d" if d["final"] == 2 else ("w" if d["final"] == s_ else "l") for s_ in (0, 1)]
+            for u, r_ in zip(units, ures):
+                tr = row(t["table"], u.lower(), u)
+                tr["spell"][u] += 1
+                tr[r_] += 1
             group_phase = t["format"] in ("grupos", "grupos+eliminacion") and (
                 t["ko_start"] is None or d["ts"] < t["ko_start"])
             d["phase"] = ""
             if group_phase:
-                g = next((g for g, m in t["groups"].items() if everyone <= {p.lower() for p in m}), None)
+                ul = {units[0].lower(), units[1].lower()}
+                g = next((g for g, m in t["groups"].items() if ul <= {x.lower() for x in m}), None)
                 if g is not None:
                     d["phase"] = f"Grupo {g}"
-                    for s_ in (0, 1):
-                        result = "d" if d["final"] == 2 else ("w" if d["final"] == s_ else "l")
-                        for name, k in zip(d["team" + str(s_)], keys[s_]):
-                            gr = row(t["gtables"][g], k, name)
-                            gr["spell"][name] += 1
-                            gr[result] += 1
+                    for u, r_ in zip(units, ures):
+                        gr = row(t["gtables"][g], u.lower(), u)
+                        gr["spell"][u] += 1
+                        gr[r_] += 1
             elif t["format"] in ("eliminacion", "grupos+eliminacion"):
                 d["phase"] = "Eliminatoria"
-                if len(keys[0]) == 1 and len(keys[1]) == 1 and d["final"] in (0, 1):
-                    t["pairs"][(keys[0][0], keys[1][0]) if d["final"] == 0 else (keys[1][0], keys[0][0])] += 1
+                if d["final"] in (0, 1):
+                    w_, l_ = (units[0], units[1]) if d["final"] == 0 else (units[1], units[0])
+                    t["pairs"][(w_.lower(), l_.lower())] += 1
 
     def finish(table, by_points=True):
         rows = list(table.values())
@@ -1050,10 +1074,15 @@ def tournaments_list_html(tours):
     live = "".join(f'<a class="live" href="/torneo{q(id=t["id"])}">🔴 En curso: <b>{html.escape(t["name"])}</b>'
                    f'<div class="muted">{html.escape(tour_summary(t))}</div></a>'
                    for t in ordered if t["state"] == "En curso")
-    items = "".join(f'<a class="titem" href="/torneo{q(id=t["id"])}">🏆 <b>{html.escape(t["name"])}</b>'
-                    f'<div class="muted">{html.escape(tour_summary(t))}</div></a>' for t in ordered)
-    return (f'{live}<details class="tours"><summary>Ver todos los torneos ({len(ordered)}) · del más '
-            f'reciente al primero</summary>{items}</details>')
+    cats = {}
+    for t in ordered:  # cada tipo en su apartado, del más reciente al primero
+        cats.setdefault(t["category"], []).append(t)
+    boxes = "".join(
+        f'<details class="tours"><summary>🏆 {html.escape(cat)} ({len(lst)})</summary>'
+        + "".join(f'<a class="titem" href="/torneo{q(id=t["id"])}"><b>{html.escape(t["name"])}</b>'
+                  f'<div class="muted">{html.escape(tour_summary(t))}</div></a>' for t in lst)
+        + "</details>" for cat, lst in cats.items())
+    return live + boxes
 
 
 def render_tournament(params):
@@ -1215,7 +1244,8 @@ def render_public(params):
                     and (a is None or d["ts"] >= a) and (b is None or d["ts"] < b)]
     duel_html = ("".join(f'<div class="duel">{duel_line(d, key)}</div>' for d in period_duels[:20])
                  or '<p class="sub">—</p>')
-    tours_html = ('<h2>Torneos</h2><p class="sub">Toca un torneo para ver su tabla, sus grupos o sus llaves. '
+    tours_html = ('<h2>Torneos</h2><p class="sub">Cada tipo de torneo tiene su apartado: tócalo para ver sus '
+                  'torneos, del más reciente al primero, y toca un torneo para ver su tabla, sus grupos o sus llaves. '
                   'Los duelos de torneo también suman, el doble, a la tabla general.</p>'
                   + tournaments_list_html(all_tours))
     body = f"""<h1>🏆 Ranking · {TITLE}</h1>
