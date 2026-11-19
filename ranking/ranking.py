@@ -44,12 +44,14 @@ DATA_DIR = os.path.dirname(CHARS) or "."
 TIERS = os.path.join(DATA_DIR, "tiers.json")
 TOURN = os.path.join(DATA_DIR, "torneos.json")
 NERFS = os.path.join(DATA_DIR, "nerfeos.json")
+SALON = os.path.join(DATA_DIR, "salon_fama.json")
+ALIASES = os.path.join(DATA_DIR, "jugadores.json")
 # las demás direcciones salen de la de personajes.json (misma carpeta "ranking" del repositorio)
 URL_BASE = CHARS_URL[:-len("personajes.json")] if CHARS_URL.endswith("personajes.json") else ""
 SELF_PATH = os.path.abspath(__file__)
 UPDATE_MARK = SELF_PATH + ".actualizado"
 REJECTED = SELF_PATH + ".rechazada"  # huella de una versión que falló al arrancar (no se reinstala)
-VERSION = "3.1"
+VERSION = "3.2"
 TZ = timezone(timedelta(hours=int(os.environ.get("RANKING_TZ_HOURS", "-5"))))  # Lima
 KEEP_DAYS = int(os.environ.get("RANKING_KEEP_DAYS", "90"))
 MIN_PCT = int(os.environ.get("RANKING_MIN_PCT", "40"))  # parecido mínimo para asignar personaje
@@ -235,7 +237,8 @@ def updater():
         files = [(CHARS_URL, CHARS)]
         if URL_BASE:
             files += [(URL_BASE + "tiers.json", TIERS), (URL_BASE + "torneos.json", TOURN),
-                      (URL_BASE + "nerfeos.json", NERFS)]
+                      (URL_BASE + "nerfeos.json", NERFS), (URL_BASE + "salon_fama.json", SALON),
+                      (URL_BASE + "jugadores.json", ALIASES)]
         for url, path in files:
             if not url:
                 continue
@@ -306,6 +309,25 @@ class Nerfs:
 NERF = Nerfs()
 
 
+# ---------------------------------------------------------------- nicknames de un mismo jugador
+def alias_map():
+    """{nick en minúsculas: nombre principal} según jugadores.json."""
+    out = {}
+    for main, nicks in (load_json(ALIASES, {}).get("alias") or {}).items():
+        main = str(main).strip()
+        if not main:
+            continue
+        out[main.lower()] = main
+        for n in nicks or []:
+            if str(n).strip():
+                out[str(n).strip().lower()] = main
+    return out
+
+
+def canon(name, amap):
+    return amap.get((name or "").strip().lower(), name)
+
+
 # ---------------------------------------------------------------- base de datos
 def db():
     con = sqlite3.connect(DB, timeout=30)
@@ -373,10 +395,11 @@ def load_duels(limit=None):
             q += f" limit {int(limit)}"
         rows = con.execute(q).fetchall()
     out = []
+    amap = alias_map()
     for r in rows:
         d = dict(r)
-        d["team0"] = json.loads(d["team0"])
-        d["team1"] = json.loads(d["team1"])
+        d["team0"] = [canon(n, amap) for n in json.loads(d["team0"])]
+        d["team1"] = [canon(n, amap) for n in json.loads(d["team1"])]
         decks = [json.loads(d.get("decks0") or "[]"), json.loads(d.get("decks1") or "[]")]
         d["chars"] = [[CHAR.detect(decks[t][i]) if i < len(decks[t]) else (None, 0)
                        for i in range(len(d["team" + str(t)]))] for t in (0, 1)]
@@ -436,10 +459,11 @@ def slug(text):
 
 def tournaments_info():
     out = []
+    amap = alias_map()
     for t in (load_json(TOURN, {}).get("torneos") or []):
         try:
-            seeds = [str(p).strip() for p in t.get("participantes") or [] if str(p).strip()]
-            groups = {str(g): [str(p).strip() for p in members if str(p).strip()]
+            seeds = [canon(str(p).strip(), amap) for p in t.get("participantes") or [] if str(p).strip()]
+            groups = {str(g): [canon(str(p).strip(), amap) for p in members if str(p).strip()]
                       for g, members in (t.get("grupos") or {}).items()}
             everyone = seeds + [p for members in groups.values() for p in members if p not in seeds]
             fmt = norm_format(t.get("formato"))
@@ -458,7 +482,7 @@ def tournaments_info():
                 "qualify": max(1, int(t.get("clasifican") or 2)),
                 "ko_start": parse_day(ko) if ko else None,
                 "ko_txt": ko or "",
-                "champion": str(t.get("campeon") or "").strip(),
+                "champion": canon(str(t.get("campeon") or "").strip(), amap),
                 "bonus": float(t.get("bono_campeon") or 0),
                 "format": fmt,
                 "label": str(t.get("tipo") or FORMAT_LABELS[fmt]),
@@ -818,6 +842,12 @@ details.tours summary{cursor:pointer;padding:8px 0;font-weight:700;color:#ffd56b
 .titem b{color:#ffe9a8}.live{background:#3a3216;border-radius:10px;padding:8px 10px;margin:6px 0;display:block;
 color:#ffe9a8;text-decoration:none}
 .groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.podium{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px}.podium div{flex:1;min-width:110px;background:#171c2e;
+border-radius:10px;padding:10px;text-align:center;font-weight:700}.podium span{display:block;font-size:1.6rem}
+.fame{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:8px}
+.fame .card{background:#171c2e;border-radius:10px;padding:10px 12px}.fame h4{margin:0 0 6px;color:#ffd56b;font-size:.9rem}
+.fame .r{display:flex;justify-content:space-between;gap:6px;padding:3px 0;border-top:1px solid #232a42;font-size:.88rem}
+.fame .r:first-of-type{border-top:none}.fame .st{white-space:nowrap;color:#ffe9a8}
 """
 
 
@@ -1051,6 +1081,32 @@ en la tabla general.</p>
     return page(body, t["name"] + " · " + TITLE)
 
 
+def salon_html():
+    data = load_json(SALON, {})
+    cats = data.get("categorias") or []
+    last = data.get("ultimo_torneo") or {}
+    if not cats and not last.get("podio"):
+        return ""
+    podium = "".join(f'<div><span>{html.escape(str(m))}</span>{html.escape(str(n))}</div>'
+                     for m, n in last.get("podio") or [])
+    podium_html = (f'<p class="sub">Resultados del último torneo{": " + html.escape(last["nombre"]) if last.get("nombre") and last["nombre"] != "Último torneo" else ""}</p>'
+                   f'<div class="podium">{podium}</div>' if podium else "")
+
+    def stars(n):
+        n = int(n)
+        return ("🌟" * n if n <= 6 else "🌟 × " + str(n))
+
+    cards = "".join(
+        f'<div class="card"><h4>{html.escape(c.get("nombre", ""))}</h4>'
+        + "".join(f'<div class="r"><span>{html.escape(str(n))}</span><span class="st">{stars(k)}</span></div>'
+                  for n, k in c.get("campeones") or [])
+        + "</div>" for c in cats)
+    return (f'<h2>🏛️ Salón de la Fama</h2><p class="sub">Campeones de los torneos, desde antes del servidor. '
+            f'Cada 🌟 es un torneo ganado.</p>{podium_html}'
+            f'<details class="tours"><summary>Ver campeones por categoría ({len(cats)})</summary>'
+            f'<div class="fame">{cards}</div></details>')
+
+
 def favorites_html(players, chars, hp, hc):
     """Calculadora de favoritismo: probabilidad de ganar de cada jugador según sus puntos y los de
     su personaje (la misma cuenta que usan los puntos del ranking; no hay empates)."""
@@ -1183,6 +1239,7 @@ parecido (desde un {MIN_PCT}% de parecido).</p>{chars_table(chars)}
 {matchups_html(hc)}
 {favorites_html(players, chars, hp, hc)}
 {tours_html}
+{salon_html()}
 <h2>Temporadas</h2>
 <p class="sub">El campeón de cada temporada y de cada semestre es quien termina con más puntos.</p>
 {seasons_html(duels)}

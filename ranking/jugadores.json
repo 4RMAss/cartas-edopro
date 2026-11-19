@@ -1,0 +1,10 @@
+{
+ "_ayuda": "Nicknames de un mismo jugador: todos sus duelos cuentan para el nombre principal. Formato: \"Nombre principal\": [\"otro nick\", \"otro nick más\"]. No importan mayúsculas ni minúsculas.",
+ "ejemplo": {
+  "4RMAss": [
+   "ARMAss",
+   "4RMAss2"
+  ]
+ },
+ "alias": {}
+}
