@@ -11,6 +11,7 @@ Desde /admin, 4RMAss puede anular un resultado o cambiar el ganador.
 tiers.json, torneos.json, personajes.json y este mismo programa se actualizan solos desde el
 repositorio de GitHub cada 10 minutos. nerfeos.json (sacado de las banlists por personaje) sirve
 para avisar de los duelos en que alguien usó cartas nerfeadas para su personaje.
+personajes_img.json trae la imagen de cada personaje (se muestra al lado de los ganadores).
 
 Solo usa la biblioteca estándar de Python 3.
 """
@@ -47,12 +48,13 @@ NERFS = os.path.join(DATA_DIR, "nerfeos.json")
 SALON = os.path.join(DATA_DIR, "salon_fama.json")
 ALIASES = os.path.join(DATA_DIR, "jugadores.json")
 CARDS = os.path.join(DATA_DIR, "cartas.json")
+IMGS = os.path.join(DATA_DIR, "personajes_img.json")
 # las demás direcciones salen de la de personajes.json (misma carpeta "ranking" del repositorio)
 URL_BASE = CHARS_URL[:-len("personajes.json")] if CHARS_URL.endswith("personajes.json") else ""
 SELF_PATH = os.path.abspath(__file__)
 UPDATE_MARK = SELF_PATH + ".actualizado"
 REJECTED = SELF_PATH + ".rechazada"  # huella de una versión que falló al arrancar (no se reinstala)
-VERSION = "3.4"
+VERSION = "3.5"
 TZ = timezone(timedelta(hours=int(os.environ.get("RANKING_TZ_HOURS", "-5"))))  # Lima
 KEEP_DAYS = int(os.environ.get("RANKING_KEEP_DAYS", "90"))
 MIN_PCT = int(os.environ.get("RANKING_MIN_PCT", "40"))  # parecido mínimo para asignar personaje
@@ -200,6 +202,32 @@ class Characters:
 CHAR = Characters()
 
 
+class Portraits:
+    """Imágenes de los personajes (personajes_img.json: nombre -> JPEG en base64)."""
+    def __init__(self):
+        self.mtime = None
+        self.data = {}
+
+    def load(self):
+        try:
+            mtime = os.path.getmtime(IMGS)
+        except OSError:
+            self.data, self.mtime = {}, None
+            return
+        if mtime == self.mtime:
+            return
+        try:
+            raw = json.load(open(IMGS, encoding="utf-8"))
+            self.data = {k: base64.b64decode(v) for k, v in raw.items() if not k.startswith("_")}
+        except Exception as exc:
+            print("personajes_img.json no válido:", exc, flush=True)
+            return
+        self.mtime = mtime
+
+
+PORTRAITS = Portraits()
+
+
 def fetch(url):
     with urllib.request.urlopen(url, timeout=30) as r:
         return r.read()
@@ -249,6 +277,14 @@ def updater():
                         os.utime(CARDS)
             except Exception as exc:
                 print("No se pudo actualizar cartas.json:", exc, flush=True)
+            try:  # las imágenes de los personajes: como mucho una vez por hora
+                if not os.path.exists(IMGS) or time.time() - os.path.getmtime(IMGS) > 3600:
+                    data = fetch(URL_BASE + "personajes_img.json")
+                    json.loads(data)
+                    if not save_if_changed(IMGS, data):
+                        os.utime(IMGS)
+            except Exception as exc:
+                print("No se pudo actualizar personajes_img.json:", exc, flush=True)
         for url, path in files:
             if not url:
                 continue
@@ -630,6 +666,7 @@ def stats(duels, start=None, end=None):
 
     for t in tours:
         t["table"] = {}
+        t["wchars"] = {}  # personaje con el que ganó su último duelo del torneo cada jugador
         t["pairs"] = Counter()
         t["gtables"] = {g: {} for g in t["groups"]}
         for u in t["everyone"]:
@@ -683,6 +720,10 @@ def stats(duels, start=None, end=None):
         t = d["tour"]
         if t:
             units = [t["unit_of"][sides[0]], t["unit_of"][sides[1]]]
+            if d["final"] in (0, 1):
+                for k, c in zip(keys[d["final"]], side_chars[d["final"]]):
+                    if c:
+                        t["wchars"][k] = c
             ures = ["d" if d["final"] == 2 else ("w" if d["final"] == s_ else "l") for s_ in (0, 1)]
             for u, r_ in zip(units, ures):
                 tr = row(t["table"], u.lower(), u)
@@ -906,6 +947,16 @@ padding:5px 8px;font-size:.85rem}.badge small{display:block;color:#8d96ad;font-s
 .tierrow{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-top:1px solid #232a42}.tierrow:first-child{border-top:none}
 .tierrow .chips{display:flex;flex-wrap:wrap;gap:5px}.chip{background:#22294a;border-radius:8px;padding:2px 7px;font-size:.82rem}
 .chip .upc{color:#7ee2a1}.chip .dnc{color:#ff8a8a}
+.av{display:inline-block;width:28px;height:28px;border-radius:50%;background:#2a2550 50% 14%/165% no-repeat;
+vertical-align:middle;margin-right:5px;border:2px solid #7ee2a1;box-sizing:border-box}
+.av.ini{display:inline-flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:800;color:#d9ccff;
+font-style:normal}
+.avbig{display:inline-block;width:92px;height:92px;border-radius:14px;background:#1e2540 50% 0/cover no-repeat;
+border:2px solid #ffd56b;box-sizing:border-box;vertical-align:middle}
+.avbig.ini{display:inline-flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:800;color:#d9ccff}
+.champ{display:flex;gap:12px;align-items:center;background:#3a3216;border-radius:12px;padding:10px 12px;margin:10px 0}
+.champ .who{font-size:1.1rem;font-weight:800;color:#ffe9a8}.champ .pics{display:flex;gap:6px}
+.podium .pics{display:flex;gap:6px;justify-content:center;margin-bottom:4px}
 form.sign{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}form.sign input{flex:1;min-width:150px;background:#0f1320;
 color:#e8ecf5;border:1px solid #3c4878;border-radius:7px;padding:7px}
 """
@@ -929,12 +980,30 @@ def player_link(name, period):
     return f'<a href="/jugador{q(n=name, t=period)}">{html.escape(name)}</a>'
 
 
+def initials(name):
+    words = re.findall(r"[A-Za-z0-9]+", name)
+    if not words:
+        return "?"
+    return (words[0][0] + (words[1][0] if len(words) > 1 else words[0][1:2])).upper()
+
+
+def avatar(char, cls="av"):
+    """Imagen del personaje (o sus iniciales si no hay imagen)."""
+    if not char:
+        return ""
+    title = html.escape(char)
+    if char in PORTRAITS.data:
+        url = f"/img/{urllib.parse.quote(char)}.jpg?v={int(PORTRAITS.mtime or 0)}"
+        return f'<span class="{cls}" title="{title}" style="background-image:url(\'{url}\')"></span>'
+    return f'<span class="{cls} ini" title="{title}">{html.escape(initials(char))}</span>'
+
+
 def side_html(names, chars, won, delta=None, period=None):
     parts = []
     for name, (char, pct) in zip(names, chars):
         txt = player_link(name, period) if name and period else html.escape(name or "?")
         if won:
-            txt = f'<span class="win">{txt}</span>'
+            txt = f'{avatar(char)}<span class="win">{txt}</span>'
         if delta is not None:
             txt += (f' <span class="up">+{delta}</span>' if delta >= 0 else
                     f' <span class="down">−{-delta}</span>')
@@ -1067,6 +1136,19 @@ def tour_champion(t):
         and t["rows"][0]["total"] else "")
 
 
+def champ_chars(t):
+    """[(jugador, personaje)] del campeón (o de cada miembro de la pareja campeona):
+    el personaje con el que ganó su último duelo del torneo (en eliminatoria, la final)."""
+    champ = tour_champion(t)
+    if not champ:
+        return []
+    amap = alias_map()
+    out = []
+    for name in split_team(champ):
+        out.append((name, (t.get("wchars") or {}).get(canon(name, amap).lower())))
+    return out
+
+
 def tour_summary(t):
     info = f'{t["label"]} · {t["start_txt"]} al {t["end_txt"]} · {t["state"]}'
     champ = tour_champion(t)
@@ -1122,7 +1204,8 @@ def tournaments_list_html(tours):
         cats.setdefault(t["category"], []).append(t)
     boxes = "".join(
         f'<details class="tours"><summary>🏆 {html.escape(cat)} ({len(lst)})</summary>'
-        + "".join(f'<a class="titem" href="/torneo{q(id=t["id"])}"><b>{html.escape(t["name"])}</b>'
+        + "".join(f'<a class="titem" href="/torneo{q(id=t["id"])}">'
+                  f'{"".join(avatar(c) for _n, c in champ_chars(t) if c)}<b>{html.escape(t["name"])}</b>'
                   f'<div class="muted">{html.escape(tour_summary(t))}</div></a>' for t in lst)
         + "</details>" for cat, lst in cats.items())
     return live + boxes
@@ -1154,8 +1237,16 @@ def render_tournament(params):
                     f'placeholder="Tu nombre en EDOPro"><button>Inscribirme</button></form>')
         signup = (f'<h2>Inscripciones</h2><p class="sub">Escribe tu nombre tal como lo usas en EDOPro.</p>{form}'
                   f'<p class="sub">Inscritos ({len(t["signups"])}): {lst}</p>')
+    champ_box = ""
+    cc = champ_chars(t)
+    if cc:
+        pics = "".join(avatar(c, "avbig") for _n, c in cc if c)
+        with_ = " y ".join(f"{html.escape(n)} ({html.escape(c)})" if c else html.escape(n) for n, c in cc)
+        champ_box = (f'<div class="champ">{f"<div class=pics>{pics}</div>" if pics else ""}<div>'
+                     f'<div class="muted">🥇 Campeón</div><div class="who">{with_}</div></div></div>')
     body = f"""{back}<h1>🏆 {html.escape(t["name"])}</h1>
 <p class="sub">{html.escape(tour_summary(t))}{html.escape(bonus)}</p>
+{champ_box}
 <p class="sub">Participantes: {html.escape(", ".join(t["everyone"]) or "—")}. Los duelos del torneo valen el doble
 en la tabla general.</p>
 {signup}
@@ -1218,7 +1309,8 @@ def salon_data(all_tours):
     if finished:
         pod = tour_podium(finished[-1])
         if pod:
-            last = {"nombre": finished[-1]["name"], "podio": pod}
+            last = {"nombre": finished[-1]["name"], "podio": pod,
+                    "personajes": [c for _n, c in champ_chars(finished[-1]) if c]}
     return cats, last
 
 
@@ -1418,8 +1510,10 @@ def salon_html(all_tours):
     cats, last = salon_data(all_tours)
     if not cats and not last.get("podio"):
         return ""
-    podium = "".join(f'<div><span>{html.escape(str(m))}</span>{html.escape(str(n))}</div>'
-                     for m, n in last.get("podio") or [])
+    champ_pics = "".join(avatar(c, "avbig") for c in last.get("personajes") or [])
+    podium = "".join(f'<div>{f"<div class=pics>{champ_pics}</div>" if i == 0 and champ_pics else ""}'
+                     f'<span>{html.escape(str(m))}</span>{html.escape(str(n))}</div>'
+                     for i, (m, n) in enumerate(last.get("podio") or []))
     podium_html = (f'<p class="sub">Resultados del último torneo{": " + html.escape(last["nombre"]) if last.get("nombre") and last["nombre"] != "Último torneo" else ""}</p>'
                    f'<div class="podium">{podium}</div>' if podium else "")
 
@@ -1748,9 +1842,21 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def send_portrait(self, name):
+        data = PORTRAITS.data.get(urllib.parse.unquote(name))
+        if data is None:
+            return self.send_html(page("<p>No existe esta imagen.</p>"), 404)
+        self.send_response(200)
+        self.send_header("Content-Type", "image/jpeg")
+        self.send_header("Cache-Control", "public, max-age=604800")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def do_GET(self):
         CHAR.load()
         NERF.load()
+        PORTRAITS.load()
         url = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(url.query)
         path = url.path
@@ -1762,6 +1868,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(render_tournament(params))
         elif path.startswith("/replay/"):
             self.send_replay(path[len("/replay/"):])
+        elif path.startswith("/img/") and path.endswith(".jpg"):
+            self.send_portrait(path[len("/img/"):-len(".jpg")])
         elif path == "/admin":
             if not self.authorized():
                 return self.ask_auth()
