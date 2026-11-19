@@ -3,6 +3,7 @@
 if not GetID then function GetID() return self_table,self_code end end
 local s,id=GetID()
 local FLAG_MOVED=id  -- marca para monstruos movidos a la zona S/T por este efecto
+local FLAG_TURN=id+300  -- marca para monstruos ya movidos este turno (no se pueden volver a mover hasta el final del turno)
 --"The Fang of Critias", "The Eye of Timaeus" y "The Claw of Hermos" (oficiales; las
 --versiones Anime los llevan como alias, así que IsCode las reconoce también)
 local CARD_CRITIAS,CARD_TIMAEUS,CARD_HERMOS=11082056,1784686,46232525
@@ -64,13 +65,12 @@ s.listed_names={CARD_CRITIAS,CARD_TIMAEUS,CARD_HERMOS}
 --efectos de mover monstruos MZONE<->SZONE y de rescate; también se le dan a
 --"Orichalcos Deuteros" y "Orichalcos Tritos" mientras estén boca arriba en la Zona de Campo
 function s.addmove(c,reset)
-	--once per turn: move a monster MZONE<->SZONE (bidireccional)
+	--move a monster MZONE<->SZONE (bidireccional); cada monstruo solo 1 vez por turno
 	local e4=Effect.CreateEffect(c)
 	e4:SetDescription(aux.Stringid(id,0))
 	e4:SetType(EFFECT_TYPE_IGNITION)
 	e4:SetProperty(EFFECT_FLAG_CARD_TARGET)
 	e4:SetRange(LOCATION_SZONE)
-	e4:SetCountLimit(1,id)
 	e4:SetCondition(s.movecon)
 	e4:SetTarget(s.movetg)
 	e4:SetOperation(s.moveop)
@@ -195,11 +195,10 @@ function s.movefilter(c)
 	return c:IsFaceup() and c:IsType(TYPE_MONSTER)
 end
 function s.movetg(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
-	if chkc then return chkc:IsControler(tp) and s.movefilter(chkc)
-		and (chkc:IsLocation(LOCATION_MZONE) or (chkc:IsLocation(LOCATION_SZONE) and chkc:GetFlagEffect(FLAG_MOVED)>0)) end
+	if chkc then return chkc:IsControler(tp) and s.anyfilter(chkc) end
 	if chk==0 then
-		local mz=Duel.IsExistingTarget(s.mzfilter,tp,LOCATION_MZONE,0,1,nil) and Duel.GetLocationCount(tp,LOCATION_SZONE)>0
-		local sz=Duel.IsExistingTarget(s.szfilter,tp,LOCATION_SZONE,0,1,nil) and Duel.GetLocationCount(tp,LOCATION_MZONE)>0
+		local mz=Duel.IsExistingTarget(s.mzmovefilter,tp,LOCATION_MZONE,0,1,nil) and Duel.GetLocationCount(tp,LOCATION_SZONE)>0
+		local sz=Duel.IsExistingTarget(s.szmovefilter,tp,LOCATION_SZONE,0,1,nil) and Duel.GetLocationCount(tp,LOCATION_MZONE)>0
 		return mz or sz
 	end
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TARGET)
@@ -211,8 +210,21 @@ end
 function s.szfilter(c)
 	return c:IsFaceup() and c:IsType(TYPE_MONSTER) and c:IsLocation(LOCATION_SZONE) and c:GetFlagEffect(FLAG_MOVED)>0
 end
+--un monstruo que ya se movió este turno no se puede volver a mover hasta el final del turno
+function s.notmoved(c)
+	return c:GetFlagEffect(FLAG_TURN)==0
+end
+function s.mzmovefilter(c)
+	return s.mzfilter(c) and s.notmoved(c)
+end
+function s.szmovefilter(c)
+	return s.szfilter(c) and s.notmoved(c)
+end
 function s.anyfilter(c)
-	return s.mzfilter(c) or s.szfilter(c)
+	return s.mzmovefilter(c) or s.szmovefilter(c)
+end
+function s.markturn(c)
+	c:RegisterFlagEffect(FLAG_TURN,RESET_EVENT|RESETS_STANDARD|RESET_PHASE|PHASE_END,0,1)
 end
 function s.moveop(e,tp,eg,ep,ev,re,r,rp)
 	local tc=Duel.GetFirstTarget()
@@ -222,12 +234,14 @@ function s.moveop(e,tp,eg,ep,ev,re,r,rp)
 		if Duel.GetLocationCount(tp,LOCATION_SZONE)>0 then
 			Duel.MoveToField(tc,tp,tp,LOCATION_SZONE,POS_FACEUP,true)
 			tc:RegisterFlagEffect(FLAG_MOVED,RESET_EVENT+RESETS_STANDARD,0,1)
+			s.markturn(tc)
 		end
 	else
 		--regresar a la Main Monster Zone (inverso)
 		if Duel.GetLocationCount(tp,LOCATION_MZONE)>0 then
 			Duel.MoveToField(tc,tp,tp,LOCATION_MZONE,POS_FACEUP,true)
 			tc:ResetFlagEffect(FLAG_MOVED)
+			s.markturn(tc)
 		end
 	end
 end
@@ -252,6 +266,7 @@ function s.resop(e,tp,eg,ep,ev,re,r,rp)
 	while tc do
 		Duel.MoveToField(tc,tp,tp,LOCATION_MZONE,POS_FACEUP,true)
 		tc:ResetFlagEffect(FLAG_MOVED)
+		s.markturn(tc)
 		tc=g:GetNext()
 	end
 end
