@@ -1,7 +1,6 @@
 --ナイトメア・シャッフル
 --Nightmare Shuffle (Anime)
 --Script: 4RMAss · Anime Server by 4RMAss
---Basado en el script (oficial) de Project Ignis (EDOPro), con licencia AGPL-3.0.
 local s,id=GetID()
 function s.initial_effect(c)
 	--Activate: Set 1 random card from your GY in a Spell & Trap Zone adjacent to this card
@@ -32,17 +31,6 @@ function s.initial_effect(c)
 	e3:SetCondition(s.sendcon)
 	e3:SetOperation(s.sendop)
 	c:RegisterEffect(e3)
-	--Send this card to the GY: activate the Set card; if it cannot be activated, send your hand and field to the GY
-	local e4=Effect.CreateEffect(c)
-	e4:SetDescription(aux.Stringid(id,2))
-	e4:SetType(EFFECT_TYPE_QUICK_O)
-	e4:SetCode(EVENT_FREE_CHAIN)
-	e4:SetRange(LOCATION_SZONE)
-	e4:SetHintTiming(0,TIMINGS_CHECK_MONSTER_E|TIMING_END_PHASE)
-	e4:SetCondition(s.actcon)
-	e4:SetCost(s.actcost)
-	e4:SetOperation(s.actop)
-	c:RegisterEffect(e4)
 end
 --Zones where this card can be placed so that it has an unused adjacent Spell & Trap Zone
 function s.zones(e,tp,eg,ep,ev,re,r,rp)
@@ -119,65 +107,4 @@ function s.sendcon(e,tp,eg,ep,ev,re,r,rp)
 end
 function s.sendop(e,tp,eg,ep,ev,re,r,rp)
 	Duel.SendtoGrave(e:GetHandler(),REASON_EFFECT)
-end
-function s.actcon(e,tp,eg,ep,ev,re,r,rp)
-	return s.getset(e:GetHandler(),tp)~=nil
-end
-function s.actcost(e,tp,eg,ep,ev,re,r,rp,chk)
-	local c=e:GetHandler()
-	if chk==0 then return c:IsAbleToGraveAsCost() end
-	e:SetLabelObject(s.getset(c,tp))
-	Duel.SendtoGrave(c,REASON_COST)
-end
-function s.actop(e,tp,eg,ep,ev,re,r,rp)
-	local c=e:GetHandler()
-	local tc=e:GetLabelObject()
-	if not tc or not tc:IsLocation(LOCATION_SZONE) or not tc:IsFacedown() then return end
-	local te=tc:GetActivateEffect()
-	local condition,cost,target,operation
-	if te then
-		condition=te:GetCondition()
-		cost=te:GetCost()
-		target=te:GetTarget()
-		operation=te:GetOperation()
-	end
-	--It can only be activated if it is a Trap or Quick-Play Spell whose activation conditions are met right now
-	local chk=(tc:IsTrap() or (tc:IsSpell() and tc:IsType(TYPE_QUICKPLAY))) and te and te:GetCode()==EVENT_FREE_CHAIN
-		and te:IsActivatable(tp)
-		and (not condition or condition(te,tp,eg,ep,ev,re,r,rp))
-		and (not cost or cost(te,tp,eg,ep,ev,re,r,rp,0))
-		and (not target or target(te,tp,eg,ep,ev,re,r,rp,0))
-	if chk then
-		Duel.ChangePosition(tc,POS_FACEUP)
-		Duel.Hint(HINT_CARD,0,tc:GetOriginalCode())
-		if not tc:IsType(TYPE_CONTINUOUS|TYPE_EQUIP) then
-			tc:CancelToGrave(false)
-		end
-		tc:CreateEffectRelation(te)
-		Duel.ClearTargetCard()
-		local prop=e:GetProperty()
-		e:SetProperty(te:GetProperty())
-		if cost then cost(te,tp,eg,ep,ev,re,r,rp,1) end
-		if target~=te:GetTarget() then target=te:GetTarget() end
-		if target then target(te,tp,eg,ep,ev,re,r,rp,1) end
-		local g=Duel.GetChainInfo(0,CHAININFO_TARGET_CARDS)
-		if g then
-			for tg in g:Iter() do tg:CreateEffectRelation(te) end
-		end
-		if tc:IsHasEffect(EFFECT_REMAIN_FIELD) then
-			tc:SetStatus(STATUS_LEAVE_CONFIRMED,false)
-		end
-		if operation~=te:GetOperation() then operation=te:GetOperation() end
-		if operation then operation(te,tp,eg,ep,ev,re,r,rp) end
-		tc:ReleaseEffectRelation(te)
-		if g then
-			for tg in g:Iter() do tg:ReleaseEffectRelation(te) end
-		end
-		e:SetProperty(prop)
-	else
-		--It did not meet its activation conditions: send all cards in your hand and field to the GY
-		Duel.ConfirmCards(1-tp,tc)
-		local sg=Duel.GetFieldGroup(tp,LOCATION_HAND|LOCATION_ONFIELD,0)
-		Duel.SendtoGrave(sg,REASON_EFFECT)
-	end
 end
