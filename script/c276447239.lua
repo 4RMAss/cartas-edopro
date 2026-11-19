@@ -4,6 +4,7 @@ if not GetID then function GetID() return self_table,self_code end end
 local s,id=GetID()
 local FLAG_MOVED=id  -- marca para monstruos movidos a la zona S/T por este efecto
 local FLAG_TURN=id+300  -- marca para monstruos ya movidos este turno (no se pueden volver a mover hasta el final del turno)
+local FLAG_CLONED=id+400  -- marca para monstruos a los que ya se les copiaron sus efectos para la zona S/T
 --"The Fang of Critias", "The Eye of Timaeus" y "The Claw of Hermos" (oficiales; las
 --versiones Anime los llevan como alias, así que IsCode las reconoce también)
 local CARD_CRITIAS,CARD_TIMAEUS,CARD_HERMOS=11082056,1784686,46232525
@@ -76,11 +77,11 @@ function s.addmove(c,reset)
 	e4:SetOperation(s.moveop)
 	if reset then e4:SetReset(reset) end
 	c:RegisterEffect(e4)
-	--when a monster you control is destroyed and you have none: resummon the moved ones
+	--when a monster leaves your Monster Zone and you have none: move the moved ones back (not a Special Summon)
 	local e5=Effect.CreateEffect(c)
 	e5:SetDescription(aux.Stringid(id,1))
 	e5:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
-	e5:SetCode(EVENT_DESTROYED)
+	e5:SetCode(EVENT_LEAVE_FIELD)
 	e5:SetRange(LOCATION_SZONE)
 	e5:SetProperty(EFFECT_FLAG_DELAY)
 	e5:SetCountLimit(1,id+1)
@@ -235,6 +236,7 @@ function s.moveop(e,tp,eg,ep,ev,re,r,rp)
 			Duel.MoveToField(tc,tp,tp,LOCATION_SZONE,POS_FACEUP,true)
 			tc:RegisterFlagEffect(FLAG_MOVED,RESET_EVENT+RESETS_STANDARD,0,1)
 			s.markturn(tc)
+			s.giveszone(tc)
 		end
 	else
 		--regresar a la Main Monster Zone (inverso)
@@ -245,7 +247,29 @@ function s.moveop(e,tp,eg,ep,ev,re,r,rp)
 		end
 	end
 end
---------- rescate: si un monstruo es destruido y no quedan, traer los movidos ----------
+--------- los monstruos movidos a la zona S/T siguen aplicando/activando sus efectos ----------
+--se copian sus efectos que funcionan en la Zona de Monstruos para que funcionen en la zona S/T
+--(solo mientras sigan ahí movidos por este efecto); los originales siguen igual
+function s.giveszone(tc)
+	if tc:GetFlagEffect(FLAG_CLONED)>0 then return end
+	tc:RegisterFlagEffect(FLAG_CLONED,RESET_EVENT|RESETS_STANDARD,0,1)
+	local effs={tc:GetOwnEffects()}
+	for _,pe in ipairs(effs) do
+		local rg=pe:GetRange()
+		if pe:GetOwner()==tc and (rg&LOCATION_MZONE)~=0
+			and not pe:IsHasType(EFFECT_TYPE_ACTIVATE|EFFECT_TYPE_EQUIP|EFFECT_TYPE_XMATERIAL) then
+			local ce=pe:Clone()
+			ce:SetRange((rg&~LOCATION_MZONE)|LOCATION_SZONE)
+			local con=pe:GetCondition()
+			ce:SetCondition(function(e,...)
+				return e:GetHandler():GetFlagEffect(FLAG_MOVED)>0 and (not con or con(e,...))
+			end)
+			ce:SetReset(RESET_EVENT|RESETS_STANDARD)
+			tc:RegisterEffect(ce,true)
+		end
+	end
+end
+--------- rescate: si un monstruo deja tu Zona de Monstruos y no quedan, regresar los movidos ----------
 function s.resdesfilter(c,tp)
 	return c:IsPreviousLocation(LOCATION_MZONE) and c:IsPreviousControler(tp)
 end
