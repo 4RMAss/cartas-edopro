@@ -1,10 +1,12 @@
 {
- "Yugi": [
-  "Yugi.ydk",
-  "yugi completo.ydk",
+ "Atem": [
   "Yugi Battle City V1 (Anime).ydk",
   "Yugi Battle City V2 (Anime).ydk",
   "Yugi Duelist Kingdom (Anime).ydk"
+ ],
+ "Yugi": [
+  "Yugi.ydk",
+  "yugi completo.ydk"
  ],
  "Yugi (Manga)": [
   "Yugi(manga).ydk"

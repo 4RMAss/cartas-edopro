@@ -1,8 +1,10 @@
 {
 "_ayuda": "Generado a partir de lflists/personajes-4rmass.lflist.conf. mapa: personaje del ranking -> listas de nerfeos que puede cumplir (basta con cumplir una).",
 "mapa": {
+"Atem": [
+"Atem"
+],
 "Yugi": [
-"Atem",
 "Yugi"
 ],
 "Kaiba": [
@@ -107,7 +109,7 @@
 511600104
 ],
 "max": 0,
-"nombre": "Fiend's Sanctuary (Anime)"
+"nombre": "Fiend's Sanctuary (Manga)"
 },
 {
 "ids": [
@@ -196,7 +198,7 @@
 511600104
 ],
 "max": 0,
-"nombre": "Fiend's Sanctuary (Anime)"
+"nombre": "Fiend's Sanctuary (Manga)"
 },
 {
 "ids": [
@@ -254,7 +256,7 @@
 511600104
 ],
 "max": 0,
-"nombre": "Fiend's Sanctuary (Anime)"
+"nombre": "Fiend's Sanctuary (Manga)"
 },
 {
 "ids": [
