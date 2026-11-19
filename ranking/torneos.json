@@ -1,0 +1,15 @@
+{
+ "_ayuda": "Torneos. Cuentan los duelos entre participantes jugados entre 'inicio' y 'fin' (fechas de Lima, ambos días incluidos). Esos duelos valen el doble en los puntos. 'campeon' y 'bono_campeon' son opcionales: el bono se suma a los puntos del campeón al terminar el torneo.",
+ "ejemplo": {
+  "nombre": "Copa de ejemplo",
+  "inicio": "2026-12-01",
+  "fin": "2026-12-03",
+  "participantes": [
+   "Jugador1",
+   "Jugador2"
+  ],
+  "campeon": "",
+  "bono_campeon": 0
+ },
+ "torneos": []
+}

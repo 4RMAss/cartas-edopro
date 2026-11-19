@@ -3,12 +3,18 @@
 
 Lee las repeticiones (.yrpX) que guarda Multirole al terminar cada duelo, apunta quién
 ganó y con qué deck, reconoce a qué personaje se parece cada deck y lo muestra en una
-página web: ranking de jugadores y ranking de personajes. Desde /admin, 4RMAss puede
-anular un resultado o cambiar el ganador.
+página web: ranking de jugadores, de personajes y de torneos. Los puntos funcionan como un
+ranking tipo FIFA/Elo: cada personaje empieza con los puntos de su tier (tiers.json) y ganar
+con un personaje débil contra uno fuerte vale más. Los torneos se definen en torneos.json.
+Desde /admin, 4RMAss puede anular un resultado o cambiar el ganador.
+
+tiers.json, torneos.json, personajes.json y este mismo programa se actualizan solos desde el
+repositorio de GitHub cada 30 minutos.
 
 Solo usa la biblioteca estándar de Python 3.
 """
 import base64
+import hashlib
 import hmac
 import html
 import json
@@ -17,6 +23,7 @@ import math
 import os
 import sqlite3
 import struct
+import sys
 import threading
 import time
 import urllib.parse
@@ -31,6 +38,15 @@ PORT = int(os.environ.get("RANKING_PORT", "7920"))
 PASSFILE = os.environ.get("RANKING_PASSFILE", "/opt/ranking/admin_password.txt")
 CHARS = os.environ.get("RANKING_CHARS", "/opt/ranking/personajes.json")
 CHARS_URL = os.environ.get("RANKING_CHARS_URL", "")  # si se indica, se actualiza solo desde GitHub
+DATA_DIR = os.path.dirname(CHARS) or "."
+TIERS = os.path.join(DATA_DIR, "tiers.json")
+TOURN = os.path.join(DATA_DIR, "torneos.json")
+# las demás direcciones salen de la de personajes.json (misma carpeta "ranking" del repositorio)
+URL_BASE = CHARS_URL[:-len("personajes.json")] if CHARS_URL.endswith("personajes.json") else ""
+SELF_PATH = os.path.abspath(__file__)
+UPDATE_MARK = SELF_PATH + ".actualizado"
+REJECTED = SELF_PATH + ".rechazada"  # huella de una versión que falló al arrancar (no se reinstala)
+VERSION = "2.0"
 TZ = timezone(timedelta(hours=int(os.environ.get("RANKING_TZ_HOURS", "-5"))))  # Lima
 KEEP_DAYS = int(os.environ.get("RANKING_KEEP_DAYS", "90"))
 MIN_PCT = int(os.environ.get("RANKING_MIN_PCT", "40"))  # parecido mínimo para asignar personaje
@@ -178,22 +194,67 @@ class Characters:
 CHAR = Characters()
 
 
-def chars_updater():
+def fetch(url):
+    with urllib.request.urlopen(url, timeout=30) as r:
+        return r.read()
+
+
+def save_if_changed(path, data):
+    old = open(path, "rb").read() if os.path.exists(path) else b""
+    if data == old:
+        return False
+    tmp = path + ".nuevo"
+    open(tmp, "wb").write(data)
+    os.replace(tmp, path)
+    return True
+
+
+def update_self():
+    """Descarga ranking.py del repositorio; si cambió y es válido, lo instala y se reinicia
+    (systemd lo vuelve a arrancar). Se guarda una copia de la versión anterior."""
+    data = fetch(URL_BASE + "ranking.py")
+    current = open(SELF_PATH, "rb").read()
+    digest = hashlib.sha256(data).hexdigest()
+    if digest == hashlib.sha256(current).hexdigest():
+        return
+    if os.path.exists(REJECTED) and open(REJECTED).read().strip() == digest:
+        return  # esa versión ya falló una vez; se espera a que la arreglen en GitHub
+    compile(data, "ranking.py", "exec")  # si tiene errores de sintaxis, no se instala
+    open(SELF_PATH + ".anterior", "wb").write(current)
+    save_if_changed(SELF_PATH, data)
+    open(UPDATE_MARK, "w").write(str(int(time.time())))
+    print("ranking.py actualizado desde GitHub; reiniciando", flush=True)
+    os._exit(0)
+
+
+def updater():
     while True:
-        if CHARS_URL:
+        files = [(CHARS_URL, CHARS)]
+        if URL_BASE:
+            files += [(URL_BASE + "tiers.json", TIERS), (URL_BASE + "torneos.json", TOURN)]
+        for url, path in files:
+            if not url:
+                continue
             try:
-                with urllib.request.urlopen(CHARS_URL, timeout=30) as r:
-                    data = r.read()
+                data = fetch(url)
                 json.loads(data)  # solo se guarda si es válido
-                old = open(CHARS, "rb").read() if os.path.exists(CHARS) else b""
-                if data != old:
-                    tmp = CHARS + ".nuevo"
-                    open(tmp, "wb").write(data)
-                    os.replace(tmp, CHARS)
+                save_if_changed(path, data)
             except Exception as exc:
-                print("No se pudo actualizar personajes.json:", exc, flush=True)
+                print(f"No se pudo actualizar {os.path.basename(path)}:", exc, flush=True)
         CHAR.load()
+        if URL_BASE:
+            try:
+                update_self()
+            except Exception as exc:
+                print("No se pudo actualizar ranking.py:", exc, flush=True)
         time.sleep(1800)
+
+
+def load_json(path, default):
+    try:
+        return json.load(open(path, encoding="utf-8"))
+    except Exception:
+        return default
 
 
 # ---------------------------------------------------------------- base de datos
@@ -276,40 +337,157 @@ def load_duels(limit=None):
     return out
 
 
-def counts(duels):
-    """Victorias/derrotas/empates por jugador y por personaje."""
+DEFAULT_POINTS = {"SSS": 1800, "SS": 1700, "S": 1600, "A+": 1550, "A": 1500, "B": 1450, "C": 1400, "D": 1300}
+K_BASE = 32          # cuánto se mueven los puntos en cada duelo
+K_TOURNAMENT = 2     # los duelos de torneo valen el doble
+START_PLAYER = 1500  # puntos iniciales de cada jugador
+
+
+def tiers_info():
+    data = load_json(TIERS, {})
+    points = dict(DEFAULT_POINTS)
+    points.update({k: v for k, v in (data.get("puntos") or {}).items() if isinstance(v, (int, float))})
+    default = data.get("por_defecto", "B")
+    chars = data.get("personajes") or {}
+
+    def tier(char):
+        t = chars.get(char, default)
+        return t if t in points else default
+
+    return tier, points, default
+
+
+def parse_day(s, end=False):
+    d = datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=TZ)
+    if end:
+        d += timedelta(days=1)
+    return d.timestamp()
+
+
+def tournaments_info():
+    out = []
+    for t in (load_json(TOURN, {}).get("torneos") or []):
+        try:
+            out.append({
+                "name": str(t.get("nombre") or "Torneo"),
+                "start": parse_day(t["inicio"]),
+                "end": parse_day(t.get("fin") or t["inicio"], end=True),
+                "start_txt": t["inicio"], "end_txt": t.get("fin") or t["inicio"],
+                "players": {str(p).strip().lower() for p in t.get("participantes") or [] if str(p).strip()},
+                "champion": str(t.get("campeon") or "").strip(),
+                "bonus": float(t.get("bono_campeon") or 0),
+            })
+        except Exception as exc:
+            print("Torneo mal escrito en torneos.json:", exc, flush=True)
+    return out
+
+
+def valid_duel(d):
+    return not (d["annulled"] or d["self"] or d["final"] not in (0, 1, 2) or not d["team0"] or not d["team1"])
+
+
+def expected(a, b):
+    return 1 / (1 + 10 ** ((b - a) / 400))
+
+
+def stats(duels):
+    """Puntos, victorias/derrotas/empates por jugador y por personaje, y tablas de torneos.
+    Añade a cada duelo: 'tour' (torneo o None) y 'delta' (puntos ganados/perdidos por lado)."""
+    tier, points, default = tiers_info()
+    tours = tournaments_info()
     players, chars = {}, {}
 
-    def add(table, key, display, result):
-        s = table.setdefault(key, {"name": display, "w": 0, "l": 0, "d": 0, "spell": Counter(), "fav": Counter()})
-        s["spell"][display] += 1
-        s[result] += 1
-        return s
+    def row(table, key, display):
+        return table.setdefault(key, {"name": display, "w": 0, "l": 0, "d": 0, "spell": Counter(),
+                                      "fav": Counter(), "pts": None})
 
-    for d in duels:
-        if d["annulled"] or d["self"] or d["final"] not in (0, 1, 2) or not d["team0"] or not d["team1"]:
+    def char_pts(c):
+        s = chars.get(c)
+        if s is not None and s["pts"] is not None:
+            return s["pts"]
+        return points[tier(c)] if c else points[default]
+
+    def player_pts(k):
+        s = players.get(k)
+        return s["pts"] if s is not None and s["pts"] is not None else START_PLAYER
+
+    events = [(d["ts"], 0, d) for d in duels if valid_duel(d)]
+    for t in tours:
+        if t["champion"] and t["bonus"]:
+            events.append((t["end"], 1, t))
+    events.sort(key=lambda e: (e[0], e[1], e[2]["file"] if e[1] == 0 else ""))
+
+    for t in tours:
+        t["table"] = {}
+    for ts, kind, d in events:
+        if kind == 1:  # bono al campeón al terminar el torneo
+            if ts <= time.time():
+                k = d["champion"].lower()
+                s = row(players, k, d["champion"])
+                s["pts"] = player_pts(k) + d["bonus"]
             continue
-        for side in (0, 1):
-            result = "d" if d["final"] == 2 else ("w" if d["final"] == side else "l")
-            for name, (char, _pct) in zip(d["team" + str(side)], d["chars"][side]):
-                if not name:
-                    continue
-                s = add(players, name.lower(), name, result)
-                if char:
-                    s["fav"][char] += 1
-                    add(chars, char, char, result)
+        keys = [[n.lower() for n in d["team" + str(s)]] for s in (0, 1)]
+        everyone = set(keys[0]) | set(keys[1])
+        d["tour"] = next((t for t in tours if t["start"] <= d["ts"] < t["end"] and t["players"]
+                          and everyone <= t["players"]), None)
+        k_factor = K_BASE * (K_TOURNAMENT if d["tour"] else 1)
+        r0 = 0.5 if d["final"] == 2 else (1.0 if d["final"] == 0 else 0.0)
+        side_chars = [[c for c, _p in d["chars"][s]] for s in (0, 1)]
+        # fuerza de cada lado = puntos de sus jugadores + ventaja/desventaja de su personaje
+        strength = []
+        cstr = []
+        for s in (0, 1):
+            cp = sum(char_pts(c) for c in side_chars[s]) / len(side_chars[s])
+            pp = sum(player_pts(k) for k in keys[s]) / len(keys[s])
+            cstr.append(cp)
+            strength.append(pp + (cp - START_PLAYER))
+        delta = k_factor * (r0 - expected(strength[0], strength[1]))
+        d["delta"] = [round(delta), -round(delta)]
+        cdelta = k_factor * (r0 - expected(cstr[0], cstr[1]))
+        same = set(c for c in side_chars[0] if c) == set(c for c in side_chars[1] if c)
+        for s in (0, 1):
+            sign = 1 if s == 0 else -1
+            result = "d" if d["final"] == 2 else ("w" if d["final"] == s else "l")
+            for name, k, c in zip(d["team" + str(s)], keys[s], side_chars[s]):
+                p = row(players, k, name)
+                p["spell"][name] += 1
+                p[result] += 1
+                p["pts"] = player_pts(k) + sign * delta
+                if c:
+                    p["fav"][c] += 1
+                    cr = row(chars, c, c)
+                    cr["spell"][c] += 1
+                    cr[result] += 1
+                    cr["pts"] = char_pts(c) + (0 if same else sign * cdelta)
+                if d["tour"]:
+                    tr = row(d["tour"]["table"], k, name)
+                    tr["spell"][name] += 1
+                    tr[result] += 1
 
-    def finish(table):
+    def finish(table, by_points=True):
         rows = list(table.values())
         for s in rows:
-            s["name"] = s["spell"].most_common(1)[0][0]  # la forma de escribirlo más usada
+            s["name"] = s["spell"].most_common(1)[0][0] if s["spell"] else s["name"]
             s["total"] = s["w"] + s["l"] + s["d"]
             s["pct"] = round(100 * s["w"] / s["total"]) if s["total"] else 0
             s["favorite"] = s["fav"].most_common(1)[0][0] if s["fav"] else ""
-        rows.sort(key=lambda s: (-s["w"], -s["pct"], s["l"], s["name"].lower()))
+            s["points"] = round(s["pts"]) if s["pts"] is not None else START_PLAYER
+            s["tpts"] = 3 * s["w"] + s["d"]
+        if by_points:
+            rows.sort(key=lambda s: (-s["points"], -s["w"], s["l"], s["name"].lower()))
+        else:
+            rows.sort(key=lambda s: (-s["tpts"], -s["w"], s["l"], s["name"].lower()))
         return rows
 
-    return finish(players), finish(chars)
+    prow = [s for s in finish(players) if s["total"]]
+    crow = finish(chars)
+    for c in crow:
+        c["tier"] = tier(c["name"])
+    for t in tours:
+        t["rows"] = finish(t["table"], by_points=False)
+        now = time.time()
+        t["state"] = "Próximo" if now < t["start"] else ("En curso" if now < t["end"] else "Terminado")
+    return prow, crow, tours
 
 
 # ---------------------------------------------------------------- páginas
@@ -329,6 +507,12 @@ tr:last-child td{border-bottom:none}.top1 td.n{color:#ffd56b}.top2 td.n{color:#d
 .muted{color:#8d96ad;font-size:.82rem}.off{opacity:.45;text-decoration:line-through}
 button{background:#2b355c;color:#e8ecf5;border:1px solid #3c4878;border-radius:7px;padding:5px 8px;margin:3px 2px;font-size:.85rem}
 button.r{background:#5a2733;border-color:#7a3443}footer{color:#7f88a0;font-size:.8rem;margin:24px 0 8px}
+.up{color:#7ee2a1;font-size:.8rem}.down{color:#ff8a8a;font-size:.8rem}
+.tour{color:#ffd56b;background:#3a3216;border-radius:9px;padding:1px 7px;font-size:.78rem;white-space:nowrap}
+.tier{display:inline-block;min-width:2.2em;border-radius:6px;padding:1px 4px;font-weight:700;font-size:.8rem;background:#2a3150}
+.tSSS{background:#7a2030}.tSS{background:#7a4a20}.tS{background:#6a6020}.tAp{background:#2f6a30}.tA{background:#215a5a}
+.tB{background:#26407a}.tC{background:#4a2f7a}.tD{background:#444a58}
+td.p{font-weight:700;color:#ffe9a8}
 """
 
 
@@ -342,12 +526,15 @@ def fmt_ts(ts):
     return datetime.fromtimestamp(ts, TZ).strftime("%d/%m/%Y %H:%M")
 
 
-def side_html(names, chars, won):
+def side_html(names, chars, won, delta=None):
     parts = []
     for name, (char, pct) in zip(names, chars):
         txt = html.escape(name or "?")
         if won:
             txt = f'<span class="win">{txt}</span>'
+        if delta is not None:
+            txt += (f' <span class="up">+{delta}</span>' if delta >= 0 else
+                    f' <span class="down">−{-delta}</span>')
         if char:
             txt += f' <span class="ch">{html.escape(char)} · {pct}%</span>'
         parts.append(txt)
@@ -356,8 +543,9 @@ def side_html(names, chars, won):
 
 def duel_line(d):
     f = d["final"]
-    a = side_html(d["team0"], d["chars"][0], f == 0)
-    b = side_html(d["team1"], d["chars"][1], f == 1)
+    delta = d.get("delta") or [None, None]
+    a = side_html(d["team0"], d["chars"][0], f == 0, delta[0])
+    b = side_html(d["team1"], d["chars"][1], f == 1, delta[1])
     res = "· Empate" if f == 2 else ("· Sin resultado" if f not in (0, 1) else "")
     why = REASONS.get(d["reason"], "Efecto de carta" if (d["reason"] or 0) >= 0x10 else "")
     extra = []
@@ -366,36 +554,83 @@ def duel_line(d):
     if why:
         extra.append(why)
     meta = " · ".join([fmt_ts(d["ts"])] + extra)
-    return f'{a} <b>vs</b> {b} {res}<div class="muted">{html.escape(meta)}</div>'
+    tour = f' <span class="tour">🏆 {html.escape(d["tour"]["name"])}</span>' if d.get("tour") else ""
+    return f'{a} <b>vs</b> {b} {res}{tour}<div class="muted">{html.escape(meta)}</div>'
 
 
-def table_html(rows, first_col, show_fav):
+def tier_badge(t):
+    cls = "t" + t.replace("+", "p")
+    return f'<span class="tier {cls}">{html.escape(t)}</span>'
+
+
+def players_table(rows):
     if not rows:
         return '<p class="sub">Todavía no hay duelos registrados.</p>'
-    head = f'<tr><th>#</th><th>{first_col}</th><th>V</th><th>D</th><th>E</th><th>%</th>'
-    head += '<th>Personaje favorito</th></tr>' if show_fav else '<th>Duelos</th></tr>'
+    head = ('<tr><th>#</th><th>Jugador</th><th>Puntos</th><th>V</th><th>D</th><th>E</th><th>%</th>'
+            '<th>Personaje favorito</th></tr>')
     trs = []
     for i, s in enumerate(rows, 1):
-        last = (f'<td class="c">{html.escape(s["favorite"]) or "—"}</td>' if show_fav
-                else f'<td>{s["total"]}</td>')
         trs.append(f'<tr class="top{i}"><td>{i}</td><td class="n">{html.escape(s["name"])}</td>'
-                   f'<td>{s["w"]}</td><td>{s["l"]}</td><td>{s["d"]}</td><td>{s["pct"]}%</td>{last}</tr>')
+                   f'<td class="p">{s["points"]}</td><td>{s["w"]}</td><td>{s["l"]}</td><td>{s["d"]}</td>'
+                   f'<td>{s["pct"]}%</td><td class="c">{html.escape(s["favorite"]) or "—"}</td></tr>')
     return f"<table>{head}{''.join(trs)}</table>"
+
+
+def chars_table(rows):
+    if not rows:
+        return '<p class="sub">Todavía no hay duelos registrados.</p>'
+    head = ('<tr><th>#</th><th>Personaje</th><th>Tier</th><th>Puntos</th><th>V</th><th>D</th><th>E</th>'
+            '<th>%</th></tr>')
+    trs = []
+    for i, s in enumerate(rows, 1):
+        trs.append(f'<tr class="top{i}"><td>{i}</td><td class="n">{html.escape(s["name"])}</td>'
+                   f'<td>{tier_badge(s["tier"])}</td><td class="p">{s["points"]}</td><td>{s["w"]}</td>'
+                   f'<td>{s["l"]}</td><td>{s["d"]}</td><td>{s["pct"]}%</td></tr>')
+    return f"<table>{head}{''.join(trs)}</table>"
+
+
+def tournament_html(t):
+    champ = t["champion"] or (t["rows"][0]["name"] if t["state"] == "Terminado" and t["rows"] else "")
+    info = f'{t["start_txt"]} al {t["end_txt"]} · {t["state"]}'
+    if champ:
+        info += f" · Campeón: {champ}"
+        if t["champion"] and t["bonus"]:
+            info += f" (+{round(t['bonus'])} puntos)"
+    if t["rows"]:
+        head = '<tr><th>#</th><th>Jugador</th><th>Pts</th><th>V</th><th>D</th><th>E</th><th>Duelos</th></tr>'
+        trs = "".join(f'<tr class="top{i}"><td>{i}</td><td class="n">{html.escape(s["name"])}</td>'
+                      f'<td class="p">{s["tpts"]}</td><td>{s["w"]}</td><td>{s["l"]}</td><td>{s["d"]}</td>'
+                      f'<td>{s["total"]}</td></tr>' for i, s in enumerate(t["rows"], 1))
+        table = f"<table>{head}{trs}</table>"
+    else:
+        table = '<p class="sub">Todavía no hay duelos de este torneo.</p>'
+    return f'<h3 style="margin:1em 0 .2em">🏆 {html.escape(t["name"])}</h3><p class="sub">{html.escape(info)}</p>{table}'
 
 
 def render_public():
     duels = load_duels()
-    players, chars = counts(duels)
+    players, chars, tours = stats(duels)
     last = [d for d in duels if not d["annulled"] and not d["self"]][:20]
     duel_html = "".join(f'<div class="duel">{duel_line(d)}</div>' for d in last) or '<p class="sub">—</p>'
+    tours_html = ""
+    if tours:
+        order = {"En curso": 0, "Próximo": 1, "Terminado": 2}
+        tours_sorted = sorted(tours, key=lambda t: (order[t["state"]], -t["start"]))
+        tours_html = ('<h2>Torneos</h2><p class="sub">Pts = 3 por victoria y 1 por empate. '
+                      'Los duelos de torneo también suman (el doble) a la tabla general.</p>'
+                      + "".join(tournament_html(t) for t in tours_sorted))
     body = f"""<h1>🏆 Ranking · {TITLE}</h1>
-<p class="sub">V = victorias · D = derrotas · E = empates. Cuenta cada duelo jugado en el servidor.</p>
-<h2>Jugadores</h2>{table_html(players, "Jugador", True)}
+<p class="sub">Puntos tipo ranking FIFA: cada jugador empieza con {START_PLAYER}. Ganar da más puntos si el
+rival es más fuerte o si tu personaje es más débil (según su tier), y perder contra alguien más débil quita
+más. Los duelos de torneo valen el doble. V = victorias · D = derrotas · E = empates.</p>
+<h2>Jugadores</h2>{players_table(players)}
 <h2>Personajes</h2>
-<p class="sub">Cada deck se compara con los decks de los personajes y cuenta para el más parecido
-(desde un {MIN_PCT}% de parecido).</p>{table_html(chars, "Personaje", False)}
+<p class="sub">Cada personaje empieza con los puntos de su tier (SSS {DEFAULT_POINTS["SSS"]} … D {DEFAULT_POINTS["D"]})
+y sube o baja con sus duelos. Cada deck se compara con los decks de los personajes y cuenta para el más
+parecido (desde un {MIN_PCT}% de parecido).</p>{chars_table(chars)}
+{tours_html}
 <h2>Últimos duelos</h2>{duel_html}
-<footer>Se cuenta por el nombre que usas en EDOPro. 4RMAss revisa y corrige los resultados.</footer>"""
+<footer>Se cuenta por el nombre que usas en EDOPro. 4RMAss revisa y corrige los resultados. · v{VERSION}</footer>"""
     return page(body)
 
 
@@ -430,7 +665,7 @@ def admin_password():
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "Ranking4RMAss/1.1"
+    server_version = "Ranking4RMAss/" + VERSION
 
     def log_message(self, fmt, *args):
         pass
@@ -499,13 +734,32 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
 
+def restore_previous(exc):
+    """Si la versión recién descargada falla al arrancar, se vuelve a la anterior."""
+    prev = SELF_PATH + ".anterior"
+    if os.path.exists(UPDATE_MARK) and os.path.exists(prev):
+        print("La versión nueva falló al arrancar; se vuelve a la anterior:", exc, flush=True)
+        open(REJECTED, "w").write(hashlib.sha256(open(SELF_PATH, "rb").read()).hexdigest())
+        os.replace(prev, SELF_PATH)
+        os.remove(UPDATE_MARK)
+        sys.exit(1)  # systemd lo vuelve a arrancar con la versión anterior
+    raise exc
+
+
 def main():
-    init_db()
-    CHAR.load()
+    try:
+        init_db()
+        CHAR.load()
+        stats(load_duels())  # comprueba que todo funciona antes de abrir la página
+        server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    except Exception as exc:
+        restore_previous(exc)
+    if os.path.exists(UPDATE_MARK):
+        os.remove(UPDATE_MARK)
     threading.Thread(target=scanner, daemon=True).start()
-    threading.Thread(target=chars_updater, daemon=True).start()
-    print(f"Ranking de {TITLE} escuchando en el puerto {PORT}", flush=True)
-    ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+    threading.Thread(target=updater, daemon=True).start()
+    print(f"Ranking de {TITLE} v{VERSION} escuchando en el puerto {PORT}", flush=True)
+    server.serve_forever()
 
 
 if __name__ == "__main__":
