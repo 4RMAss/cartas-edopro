@@ -165,6 +165,7 @@ RAW_BASE="https://raw.githubusercontent.com/${REPO_CARTAS#https://github.com/}/m
 mkdir -p /opt/ranking
 if curl -fsSL "$RAW_BASE/ranking/ranking.py" -o /opt/ranking/ranking.py.nuevo; then
   mv /opt/ranking/ranking.py.nuevo /opt/ranking/ranking.py
+  curl -fsSL "$RAW_BASE/ranking/personajes.json" -o /opt/ranking/personajes.json || true
   if [ ! -s /opt/ranking/admin_password.txt ]; then
     openssl rand -hex 5 > /opt/ranking/admin_password.txt
   fi
@@ -179,6 +180,8 @@ Environment=RANKING_REPLAYS=$DIR/replays
 Environment=RANKING_DB=/opt/ranking/ranking.db
 Environment=RANKING_PORT=$PUERTO_RANKING
 Environment=RANKING_PASSFILE=/opt/ranking/admin_password.txt
+Environment=RANKING_CHARS=/opt/ranking/personajes.json
+Environment=RANKING_CHARS_URL=$RAW_BASE/ranking/personajes.json
 ExecStart=/usr/bin/python3 /opt/ranking/ranking.py
 Restart=always
 RestartSec=5
