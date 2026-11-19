@@ -2,10 +2,10 @@
 --The Seal of Orichalcos (Anime)
 if not GetID then function GetID() return self_table,self_code end end
 local s,id=GetID()
-if not Card.ListsCode then
-function Card.ListsCode(c,...) return false end
-end
 local FLAG_MOVED=id  -- marca para monstruos movidos a la zona S/T por este efecto
+--"The Fang of Critias", "The Eye of Timaeus" y "The Claw of Hermos" (oficiales; las
+--versiones Anime los llevan como alias, así que IsCode las reconoce también)
+local CARD_CRITIAS,CARD_TIMAEUS,CARD_HERMOS=11082056,1784686,46232525
 function s.initial_effect(c)
 	--activate (once per duel)
 	local e1=Effect.CreateEffect(c)
@@ -51,6 +51,7 @@ function s.initial_effect(c)
 	c:RegisterEffect(e4)
 	--when a monster you control is destroyed and you have none: resummon the moved ones
 	local e5=Effect.CreateEffect(c)
+	e5:SetDescription(aux.Stringid(id,1))
 	e5:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
 	e5:SetCode(EVENT_DESTROYED)
 	e5:SetRange(LOCATION_SZONE)
@@ -59,18 +60,104 @@ function s.initial_effect(c)
 	e5:SetCondition(s.rescon)
 	e5:SetOperation(s.resop)
 	c:RegisterEffect(e5)
+	--registro global: Critias y Hermos no guardan sus materiales en la carta que crean,
+	--así que se apunta aquí qué cartas mandaron al Cementerio para crearla
+	aux.GlobalCheck(s,function()
+		s.matmap={}
+		local ge1=Effect.GlobalEffect()
+		ge1:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
+		ge1:SetCode(EVENT_TO_GRAVE)
+		ge1:SetOperation(s.pendop)
+		Duel.RegisterEffect(ge1,0)
+		local ge2=ge1:Clone()
+		ge2:SetCode(EVENT_CHAIN_SOLVED)
+		ge2:SetOperation(s.mapop)
+		Duel.RegisterEffect(ge2,0)
+	end)
 end
-s.listed_names={170000151,170000152,170000153}
+s.listed_names={CARD_CRITIAS,CARD_TIMAEUS,CARD_HERMOS}
+function s.isdragon(c)
+	return c:IsCode(CARD_CRITIAS,CARD_TIMAEUS,CARD_HERMOS)
+end
+--¿la carta lleva a Timaeus, Critias o Hermos como Material de Fusión?
+--(lista de materiales del script, o las marcas que usan Critias y Hermos)
+function s.desfilter(c)
+	if c.material_trap or c.hermos_filter then return true end
+	return c:ListsCodeAsMaterial(CARD_CRITIAS,CARD_TIMAEUS,CARD_HERMOS)
+end
+------- registro de materiales de Critias / Hermos -------
+function s.pendop(e,tp,eg,ep,ev,re,r,rp)
+	if not re then return end
+	local rc=re:GetHandler()
+	if not rc or not s.isdragon(rc) then return end
+	local g=eg:Filter(function(c) return c~=rc end,nil)
+	if #g==0 then return end
+	if s.pending then s.pending:DeleteGroup() end
+	g:KeepAlive()
+	s.pending=g
+	s.pending_rc=rc
+end
+function s.newfusfilter(c)
+	return c:IsPreviousLocation(LOCATION_EXTRA) and c:GetTurnID()==Duel.GetTurnCount()
+		and s.desfilter(c) and not s.matmap[c:GetFieldID()]
+end
+function s.mapop(e,tp,eg,ep,ev,re,r,rp)
+	if not s.pending or not re or re:GetHandler()~=s.pending_rc then return end
+	local g=Duel.GetMatchingGroup(s.newfusfilter,0,LOCATION_ONFIELD,LOCATION_ONFIELD,nil)
+	for tc in g:Iter() do
+		local mg=s.pending:Clone()
+		mg:KeepAlive()
+		s.matmap[tc:GetFieldID()]=mg
+	end
+	s.pending:DeleteGroup()
+	s.pending=nil
+	s.pending_rc=nil
+end
+------- al activarse: destruir esas cartas y devolver el otro material -------
 function s.activate(e,tp,eg,ep,ev,re,r,rp)
-	--destroy your cards that list the Legendary Dragons as Fusion Material
-	local g=Duel.GetMatchingGroup(s.desfilter,tp,LOCATION_MZONE+LOCATION_SZONE,0,nil)
-	if g:GetCount()>0 then
-		Duel.Destroy(g,REASON_EFFECT)
+	local c=e:GetHandler()
+	local g=Duel.GetMatchingGroup(s.desfilter,tp,LOCATION_ONFIELD,0,c)
+	if #g==0 then return end
+	--antes de destruir, se apunta el otro Material de Fusión de cada una
+	local mats=Group.CreateGroup()
+	for tc in g:Iter() do
+		local mg=tc:GetMaterial()
+		if (not mg or #mg==0) and s.matmap then mg=s.matmap[tc:GetFieldID()] end
+		if mg then
+			for mc in mg:Iter() do
+				if not s.isdragon(mc) then mats:AddCard(mc) end
+			end
+		end
+	end
+	if Duel.Destroy(g,REASON_EFFECT)==0 then return end
+	--devolver al campo el otro Material de Fusión, si lo hay
+	local mons=mats:Filter(s.retmonfilter,nil,e,tp)
+	local sts=mats:Filter(s.retstfilter,nil)
+	if #mons>0 then
+		local ft=Duel.GetLocationCount(tp,LOCATION_MZONE)
+		if ft>0 then
+			if Duel.IsPlayerAffectedByEffect(tp,CARD_BLUEEYES_SPIRIT) then ft=1 end
+			if #mons>ft then
+				Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
+				mons=mons:Select(tp,ft,ft,nil)
+			end
+			Duel.BreakEffect()
+			Duel.SpecialSummon(mons,0,tp,tp,true,false,POS_FACEUP)
+		end
+	end
+	if #sts>0 and Duel.GetLocationCount(tp,LOCATION_SZONE)>0 then
+		Duel.BreakEffect()
+		Duel.SSet(tp,sts)
 	end
 end
-function s.desfilter(c)
-	if not c.ListsCode then return false end
-	return c:ListsCode(170000151) or c:ListsCode(170000152) or c:ListsCode(170000153)
+function s.retmonfilter(c,e,tp)
+	return c:IsLocation(LOCATION_GRAVE|LOCATION_REMOVED) and c:IsMonster()
+		and (c:IsFaceup() or c:IsLocation(LOCATION_GRAVE))
+		and c:IsCanBeSpecialSummoned(e,0,tp,true,false)
+end
+function s.retstfilter(c)
+	return c:IsLocation(LOCATION_GRAVE|LOCATION_REMOVED) and c:IsSpellTrap()
+		and (c:IsFaceup() or c:IsLocation(LOCATION_GRAVE)) and c:IsSSetable()
 end
 --------- mover MZONE <-> SZONE (bidireccional) ----------
 function s.movecon(e,tp,eg,ep,ev,re,r,rp)
@@ -118,9 +205,13 @@ function s.moveop(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 --------- rescate: si un monstruo es destruido y no quedan, traer los movidos ----------
+function s.resdesfilter(c,tp)
+	return c:IsPreviousLocation(LOCATION_MZONE) and c:IsPreviousControler(tp)
+end
 function s.rescon(e,tp,eg,ep,ev,re,r,rp)
-	--se destruyo un monstruo tuyo Y ahora no tienes monstruos en MZONE Y hay movidos en SZONE
-	return Duel.GetFieldGroupCount(tp,LOCATION_MZONE,0)==0
+	--se destruyó un monstruo tuyo Y ahora no tienes monstruos en MZONE Y hay movidos en SZONE
+	return eg:IsExists(s.resdesfilter,1,nil,tp)
+		and Duel.GetFieldGroupCount(tp,LOCATION_MZONE,0)==0
 		and Duel.IsExistingMatchingCard(s.szfilter,tp,LOCATION_SZONE,0,1,nil)
 end
 function s.resop(e,tp,eg,ep,ev,re,r,rp)
