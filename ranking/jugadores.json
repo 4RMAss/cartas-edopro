@@ -6,5 +6,9 @@
    "4RMAss2"
   ]
  },
- "alias": {}
+ "alias": {
+  "4RMAss": [
+   "ARMAss"
+  ]
+ }
 }
