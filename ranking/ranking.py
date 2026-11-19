@@ -46,7 +46,7 @@ URL_BASE = CHARS_URL[:-len("personajes.json")] if CHARS_URL.endswith("personajes
 SELF_PATH = os.path.abspath(__file__)
 UPDATE_MARK = SELF_PATH + ".actualizado"
 REJECTED = SELF_PATH + ".rechazada"  # huella de una versión que falló al arrancar (no se reinstala)
-VERSION = "2.0"
+VERSION = "2.1"
 TZ = timezone(timedelta(hours=int(os.environ.get("RANKING_TZ_HOURS", "-5"))))  # Lima
 KEEP_DAYS = int(os.environ.get("RANKING_KEEP_DAYS", "90"))
 MIN_PCT = int(os.environ.get("RANKING_MIN_PCT", "40"))  # parecido mínimo para asignar personaje
@@ -513,6 +513,14 @@ button.r{background:#5a2733;border-color:#7a3443}footer{color:#7f88a0;font-size:
 .tSSS{background:#7a2030}.tSS{background:#7a4a20}.tS{background:#6a6020}.tAp{background:#2f6a30}.tA{background:#215a5a}
 .tB{background:#26407a}.tC{background:#4a2f7a}.tD{background:#444a58}
 td.p{font-weight:700;color:#ffe9a8}
+.calc{background:#171c2e;border-radius:10px;padding:12px}
+.calc .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.calc .side{flex:1;min-width:150px;display:flex;flex-direction:column;gap:6px}
+.calc select{background:#0f1320;color:#e8ecf5;border:1px solid #3c4878;border-radius:7px;padding:7px;font-size:.92rem}
+.calc .vs{font-weight:800;color:#9fb3ff;padding:0 4px}
+.bar{display:flex;height:30px;border-radius:8px;overflow:hidden;margin:12px 0 6px;font-weight:700;font-size:.9rem}
+.bar div{display:flex;align-items:center;justify-content:center;white-space:nowrap;transition:width .3s}
+#fa{background:#2f6a9a}#fb{background:#9a3a4a}
 """
 
 
@@ -607,6 +615,56 @@ def tournament_html(t):
     return f'<h3 style="margin:1em 0 .2em">🏆 {html.escape(t["name"])}</h3><p class="sub">{html.escape(info)}</p>{table}'
 
 
+def favorites_html(players, chars):
+    """Calculadora de favoritismo: probabilidad de ganar de cada jugador según sus puntos y los de
+    su personaje (la misma cuenta que usan los puntos del ranking; no hay empates)."""
+    tier, points, default = tiers_info()
+    cdata = {}
+    for name in (load_json(TIERS, {}).get("personajes") or {}):
+        cdata[name] = {"p": points[tier(name)], "t": tier(name)}
+    for c in chars:
+        cdata[c["name"]] = {"p": c["points"], "t": c["tier"]}
+    clist = [{"n": n, "p": v["p"], "t": v["t"]} for n, v in sorted(cdata.items(), key=lambda kv: kv[0].lower())]
+    plist = [{"n": s["name"], "p": s["points"], "f": s["favorite"]} for s in players]
+    plist.append({"n": "Otro jugador (sin duelos)", "p": START_PLAYER, "f": ""})
+    data = json.dumps({"P": plist, "C": clist, "D": points[default], "S": START_PLAYER},
+                      ensure_ascii=False).replace("</", "<\\/")
+    return f"""<h2>Favoritismo</h2>
+<p class="sub">Elige a los dos jugadores y con qué personaje juega cada uno. Se calcula con los puntos del
+jugador y los de su personaje, igual que el ranking. En Yu-Gi-Oh! no hay empates, así que entre los dos
+siempre suman 100%.</p>
+<div class="calc"><div class="row">
+<div class="side"><select id="pa"></select><select id="ca"></select></div>
+<div class="vs">vs</div>
+<div class="side"><select id="pb"></select><select id="cb"></select></div>
+</div><div class="bar"><div id="fa"></div><div id="fb"></div></div>
+<div class="muted" id="fr"></div></div>
+<script>
+(function(){{
+const X={data};
+const $=id=>document.getElementById(id);
+function fill(sel,list,label){{sel.innerHTML="";list.forEach((o,i)=>{{const op=document.createElement("option");
+op.value=i;op.textContent=label(o);sel.appendChild(op);}});}}
+const none={{n:"Sin personaje reconocido",p:X.D,t:""}};
+const C=[none].concat(X.C);
+fill($("pa"),X.P,o=>o.n+" ("+o.p+" pts)");fill($("pb"),X.P,o=>o.n+" ("+o.p+" pts)");
+fill($("ca"),C,o=>o.t?o.n+" · "+o.t+" ("+o.p+")":o.n);fill($("cb"),C,o=>o.t?o.n+" · "+o.t+" ("+o.p+")":o.n);
+function fav(pi,cs){{const f=X.P[pi].f;const k=C.findIndex(c=>c.n===f);cs.value=k>0?k:0;}}
+$("pb").value=X.P.length>2?1:0;fav($("pa").value,$("ca"));fav($("pb").value,$("cb"));
+function upd(){{const a=X.P[$("pa").value],b=X.P[$("pb").value],ca=C[$("ca").value],cb=C[$("cb").value];
+const sa=a.p+(ca.p-X.S),sb=b.p+(cb.p-X.S);const p=1/(1+Math.pow(10,(sb-sa)/400));
+let pa=Math.round(100*p);if(pa<1)pa=1;if(pa>99)pa=99;const pb=100-pa;
+$("fa").style.width=pa+"%";$("fb").style.width=pb+"%";
+$("fa").textContent=pa+"%";$("fb").textContent=pb+"%";
+const na=a.n+" ("+ca.n+")",nb=b.n+" ("+cb.n+")";
+$("fr").textContent=pa===pb?"Duelo parejo: 50% y 50%.":(pa>pb?na:nb)+" es favorito: "+Math.max(pa,pb)+"% contra "+Math.min(pa,pb)+"%.";}}
+["pa","pb","ca","cb"].forEach(id=>$(id).addEventListener("change",e=>{{
+if(id==="pa")fav($("pa").value,$("ca"));if(id==="pb")fav($("pb").value,$("cb"));upd();}}));
+upd();
+}})();
+</script>"""
+
+
 def render_public():
     duels = load_duels()
     players, chars, tours = stats(duels)
@@ -628,6 +686,7 @@ más. Los duelos de torneo valen el doble. V = victorias · D = derrotas · E = 
 <p class="sub">Cada personaje empieza con los puntos de su tier (SSS {DEFAULT_POINTS["SSS"]} … D {DEFAULT_POINTS["D"]})
 y sube o baja con sus duelos. Cada deck se compara con los decks de los personajes y cuenta para el más
 parecido (desde un {MIN_PCT}% de parecido).</p>{chars_table(chars)}
+{favorites_html(players, chars)}
 {tours_html}
 <h2>Últimos duelos</h2>{duel_html}
 <footer>Se cuenta por el nombre que usas en EDOPro. 4RMAss revisa y corrige los resultados. · v{VERSION}</footer>"""
