@@ -54,7 +54,7 @@ URL_BASE = CHARS_URL[:-len("personajes.json")] if CHARS_URL.endswith("personajes
 SELF_PATH = os.path.abspath(__file__)
 UPDATE_MARK = SELF_PATH + ".actualizado"
 REJECTED = SELF_PATH + ".rechazada"  # huella de una versión que falló al arrancar (no se reinstala)
-VERSION = "3.5"
+VERSION = "3.6"
 TZ = timezone(timedelta(hours=int(os.environ.get("RANKING_TZ_HOURS", "-5"))))  # Lima
 KEEP_DAYS = int(os.environ.get("RANKING_KEEP_DAYS", "90"))
 MIN_PCT = int(os.environ.get("RANKING_MIN_PCT", "40"))  # parecido mínimo para asignar personaje
@@ -455,6 +455,9 @@ def load_duels(limit=None):
         d["nerf"] = [[NERF.check(d["chars"][t][i][0], decks[t][i] if i < len(decks[t]) else [])
                       for i in range(len(d["team" + str(t)]))] for t in (0, 1)]
         d["final"] = d["corrected"] if d["corrected"] is not None else d["winner"]
+        # Si alguien se desconectó o se le cerró el juego, el duelo no cuenta para el ranking
+        # (salvo que 4RMAss le ponga un ganador desde /admin)
+        d["disconnect"] = d["reason"] == 0x04 and d["corrected"] is None
         d["self"] = bool({n.lower() for n in d["team0"]} & {n.lower() for n in d["team1"]})
         out.append(d)
     return out
@@ -579,7 +582,8 @@ def tournaments_info():
 
 
 def valid_duel(d):
-    return not (d["annulled"] or d["self"] or d["final"] not in (0, 1, 2) or not d["team0"] or not d["team1"])
+    return not (d["annulled"] or d["self"] or d.get("disconnect") or d["final"] not in (0, 1, 2)
+                or not d["team0"] or not d["team1"])
 
 
 def expected(a, b):
@@ -1018,11 +1022,13 @@ def replay_exists(fn):
 
 
 def duel_line(d, period=None):
-    f = d["final"]
+    f = None if d.get("disconnect") else d["final"]
     delta = d.get("delta") or [None, None]
     a = side_html(d["team0"], d["chars"][0], f == 0, delta[0], period)
     b = side_html(d["team1"], d["chars"][1], f == 1, delta[1], period)
     res = "· Empate" if f == 2 else ("· Sin resultado" if f not in (0, 1) else "")
+    if d.get("disconnect"):
+        res = '· <span class="warn">Desconexión: no cuenta para el ranking</span>'
     why = REASONS.get(d["reason"], "Efecto de carta" if (d["reason"] or 0) >= 0x10 else "")
     extra = []
     if d["corrected"] is not None:
