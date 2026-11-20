@@ -1,0 +1,83 @@
+# Compila el motor de duelos (libocgcore.so) que usa el servidor "Anime Server by 4RMAss":
+# es el motor oficial de Project Ignis (la misma versión que publica ProjectIgnis/bin) con el
+# parche core/pendulos-zona-principal.patch: si la sala tiene a la vez Zonas de Monstruo Extra y
+# Zonas de Péndulo separadas, los Péndulos boca arriba del Extra Deck pueden ir a cualquier
+# Zona de Monstruo Principal. Se compila igual que el oficial (musl, estático).
+# Se ejecuta al cambiar el parche y una vez al día, por si Project Ignis actualizó el motor.
+name: Motor 4RMAss
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'core/pendulos-zona-principal.patch'
+      - '.github/workflows/motor-4rmass.yml'
+  schedule:
+    - cron: '23 8 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: motor-4rmass
+  cancel-in-progress: false
+
+jobs:
+  compilar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versión del motor oficial
+        id: ver
+        run: |
+          git clone -q --depth 1 https://github.com/ProjectIgnis/bin.git /tmp/bin
+          MSG="$(git -C /tmp/bin log -1 --format=%s)"
+          HASH="$(echo "$MSG" | grep -oE '[0-9a-f]{7,40}' | tail -1 || true)"
+          echo "Último motor oficial: $MSG"
+          PATCH_SUM="$(sha256sum core/pendulos-zona-principal.patch | cut -c1-16)"
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
+          echo "version=${HASH:-master} $PATCH_SUM" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ] && [ -f core/libocgcore.so ] && [ "$(cat core/VERSION 2>/dev/null)" = "${HASH:-master} $PATCH_SUM" ]; then
+            echo "Sin cambios: no hace falta compilar."
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Descargar el código del motor y aplicar el parche
+        if: steps.ver.outputs.skip != '1'
+        run: |
+          git clone -q https://github.com/edo9300/ygopro-core.git /tmp/core
+          cd /tmp/core
+          if [ -n "${{ steps.ver.outputs.hash }}" ]; then git checkout -q "${{ steps.ver.outputs.hash }}"; fi
+          git submodule update --init --recursive -q
+          git apply "$GITHUB_WORKSPACE/core/pendulos-zona-principal.patch"
+          git diff --stat
+
+      - name: Compilar (musl, estático, como el oficial)
+        if: steps.ver.outputs.skip != '1'
+        run: |
+          cd /tmp/core
+          sudo docker build --build-arg target_arch=x86_64-linux-musl . -t alpine-cmake -f ./scripts/Dockerfile
+          TRAVIS_OS_NAME=linux ./scripts/install-premake5.sh
+          ./premake5 gmake2
+          sudo docker run --rm -v "$PWD:/core" -w /core alpine-cmake \
+            make -Cbuild ocgcoreshared -j"$(nproc)" config=release LDFLAGS="-static -Wl,-Bstatic"
+          sudo chown -R "$USER" bin
+          strip --strip-unneeded bin/release/libocgcore.so
+          ls -la bin/release/libocgcore.so
+          # comprobación: no debe depender de ninguna otra biblioteca
+          if readelf -d bin/release/libocgcore.so | grep -q NEEDED; then echo "Depende de otras bibliotecas"; exit 1; fi
+
+      - name: Guardar en el repositorio
+        if: steps.ver.outputs.skip != '1'
+        run: |
+          cp /tmp/core/bin/release/libocgcore.so core/libocgcore.so
+          echo "${{ steps.ver.outputs.version }}" > core/VERSION
+          git config user.name "4RMAss"
+          git config user.email "4RMAss@users.noreply.github.com"
+          git add core/libocgcore.so core/VERSION
+          if git diff --cached --quiet; then echo "Nada que subir"; exit 0; fi
+          git commit -m "Motor 4RMAss: libocgcore ${{ steps.ver.outputs.hash }} + Péndulos en Zona Principal"
+          git pull -q --rebase origin main
+          git push origin HEAD:main

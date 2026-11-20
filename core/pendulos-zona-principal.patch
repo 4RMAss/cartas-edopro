@@ -1,0 +1,13 @@
+--- a/field.cpp	2026-11-18 18:31:44.237539055 -0500
++++ b/field.cpp	2026-11-20 16:28:11.038778935 -0500
+@@ -847,6 +847,10 @@
+ 	if(is_flag(DUEL_EMZONE)) {
+ 		if(is_flag(DUEL_FSX_MMZONE) && pcard && pcard->is_position(POS_FACEDOWN) && (pcard->data.type & (get_extra_deck_types() & ~TYPE_LINK)))
+ 			return 0x7f;
++		// Regla de Anime Server by 4RMAss: con Zonas de Monstruo Extra y Zonas de Pendulo separadas a la vez,
++		// los monstruos de Pendulo boca arriba del Extra Deck pueden ir a cualquier Zona de Monstruo Principal.
++		if(is_flag(DUEL_SEPARATE_PZONE) && pcard && pcard->is_position(POS_FACEUP) && (pcard->data.type & TYPE_PENDULUM))
++			return 0x7f;
+ 		else
+ 			return get_linked_zone(playerid) | (1u << 5) | (1u << 6);
+ 	} else {
