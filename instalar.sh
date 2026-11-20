@@ -99,7 +99,7 @@ cat > "$DIR/config.json" <<EOF
   ],
   "banlistProvider": { "observedRepos": ["banlists", "cartas"], "fileRegex": ".*\\\\.lflist\\\\.conf" },
   "coreProvider": {
-    "observedRepos": ["bin"],
+    "observedRepos": ["cartas"],
     "fileRegex": ".*libocgcore\\\\.so",
     "tmpPath": "./tmp/",
     "coreType": "hornet",
