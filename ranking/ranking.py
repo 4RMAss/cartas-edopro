@@ -54,11 +54,16 @@ URL_BASE = CHARS_URL[:-len("personajes.json")] if CHARS_URL.endswith("personajes
 SELF_PATH = os.path.abspath(__file__)
 UPDATE_MARK = SELF_PATH + ".actualizado"
 REJECTED = SELF_PATH + ".rechazada"  # huella de una versión que falló al arrancar (no se reinstala)
-VERSION = "3.6"
+VERSION = "3.7"
 TZ = timezone(timedelta(hours=int(os.environ.get("RANKING_TZ_HOURS", "-5"))))  # Lima
 KEEP_DAYS = int(os.environ.get("RANKING_KEEP_DAYS", "90"))
 MIN_PCT = int(os.environ.get("RANKING_MIN_PCT", "40"))  # parecido mínimo para asignar personaje
 TITLE = "Anime Server by 4RMAss"
+# Lista de salas de Multirole (con sus notas): las salas cuyas notas dicen «prueba» no cuentan
+LOBBY_URL = os.environ.get("RANKING_LOBBY", "http://127.0.0.1:7922/")
+TEST_WORDS = re.compile(r"prueba|test|pr[aá]ctica", re.I)
+# Hasta esta fecha (20/11/2026 17:34, Lima) las desconexiones no contaban; desde entonces vuelven a contar
+DISCONNECT_FREE_UNTIL = 1795214049
 
 MSG_WIN = 5
 MSG_OLD_REPLAY = 231  # dentro va la repetición antigua (YRP), con los decks
@@ -394,6 +399,8 @@ def init_db():
         con.execute("create table if not exists bad(file text primary key, error text)")
         con.execute("create table if not exists signups(tid text, key text, name text, ts integer, "
                     "primary key(tid, key))")
+        con.execute("create table if not exists test_rooms(id integer primary key autoincrement, names text, "
+                    "notes text, first_seen integer, last_seen integer)")
 
 
 def scan_once():
@@ -436,16 +443,58 @@ def scanner():
         time.sleep(20)
 
 
+def lobby_watcher():
+    """Mira cada 5 segundos la lista de salas del servidor y apunta qué jugadores están en salas
+    cuyas notas dicen «prueba» (o «test», «práctica»): esos duelos no cuentan para el ranking."""
+    active = {}
+    warned = False
+    while True:
+        try:
+            with urllib.request.urlopen(LOBBY_URL, timeout=5) as r:
+                data = json.loads(r.read().decode("utf-8", "replace"))
+            now = int(time.time())
+            seen = set()
+            with db_lock, db() as con:
+                for room in data.get("rooms") or []:
+                    notes = str(room.get("roomnotes") or "")
+                    if not TEST_WORDS.search(notes):
+                        continue
+                    names = sorted({str(u.get("name") or "").strip().lower() for u in room.get("users") or []} - {""})
+                    if not names:
+                        continue
+                    key = (room.get("roomid"), "|".join(names))
+                    seen.add(key)
+                    if key in active:
+                        con.execute("update test_rooms set last_seen=? where id=?", (now, active[key]))
+                    else:
+                        cur = con.execute("insert into test_rooms(names,notes,first_seen,last_seen) values (?,?,?,?)",
+                                          (key[1], notes[:200], now, now))
+                        active[key] = cur.lastrowid
+            for k in list(active):
+                if k not in seen:
+                    del active[k]
+            warned = False
+        except Exception as exc:
+            if not warned:
+                print("No se pudo leer la lista de salas:", exc, flush=True)
+                warned = True
+        time.sleep(5)
+
+
 def load_duels(limit=None):
     with db_lock, db() as con:
         q = "select * from duels order by ts desc"
         if limit:
             q += f" limit {int(limit)}"
         rows = con.execute(q).fetchall()
+        tests = [(set(t["names"].split("|")), t["first_seen"], t["last_seen"])
+                 for t in con.execute("select names, first_seen, last_seen from test_rooms")]
     out = []
     amap = alias_map()
     for r in rows:
         d = dict(r)
+        raw = {n.strip().lower() for n in json.loads(d["team0"]) + json.loads(d["team1"])}
+        in_test_room = any(names == raw and first - 120 <= d["ts"] <= last + 600 for names, first, last in tests)
         d["team0"] = [canon(n, amap) for n in json.loads(d["team0"])]
         d["team1"] = [canon(n, amap) for n in json.loads(d["team1"])]
         decks = [json.loads(d.get("decks0") or "[]"), json.loads(d.get("decks1") or "[]")]
@@ -457,7 +506,9 @@ def load_duels(limit=None):
         d["final"] = d["corrected"] if d["corrected"] is not None else d["winner"]
         # Si alguien se desconectó o se le cerró el juego, el duelo no cuenta para el ranking
         # (salvo que 4RMAss le ponga un ganador desde /admin)
-        d["disconnect"] = d["reason"] == 0x04 and d["corrected"] is None
+        d["disconnect"] = d["reason"] == 0x04 and d["corrected"] is None and d["ts"] < DISCONNECT_FREE_UNTIL
+        # Duelos jugados en salas de prueba: no cuentan (salvo que 4RMAss les ponga un ganador)
+        d["test"] = in_test_room and d["corrected"] is None
         d["self"] = bool({n.lower() for n in d["team0"]} & {n.lower() for n in d["team1"]})
         out.append(d)
     return out
@@ -582,7 +633,7 @@ def tournaments_info():
 
 
 def valid_duel(d):
-    return not (d["annulled"] or d["self"] or d.get("disconnect") or d["final"] not in (0, 1, 2)
+    return not (d["annulled"] or d["self"] or d.get("disconnect") or d.get("test") or d["final"] not in (0, 1, 2)
                 or not d["team0"] or not d["team1"])
 
 
@@ -1022,13 +1073,15 @@ def replay_exists(fn):
 
 
 def duel_line(d, period=None):
-    f = None if d.get("disconnect") else d["final"]
+    f = None if d.get("disconnect") or d.get("test") else d["final"]
     delta = d.get("delta") or [None, None]
     a = side_html(d["team0"], d["chars"][0], f == 0, delta[0], period)
     b = side_html(d["team1"], d["chars"][1], f == 1, delta[1], period)
     res = "· Empate" if f == 2 else ("· Sin resultado" if f not in (0, 1) else "")
     if d.get("disconnect"):
         res = '· <span class="warn">Desconexión: no cuenta para el ranking</span>'
+    if d.get("test"):
+        res = '· <span class="warn">Sala de prueba: no cuenta para el ranking</span>'
     why = REASONS.get(d["reason"], "Efecto de carta" if (d["reason"] or 0) >= 0x10 else "")
     extra = []
     if d["corrected"] is not None:
@@ -1984,6 +2037,7 @@ def main():
         os.remove(UPDATE_MARK)
     threading.Thread(target=scanner, daemon=True).start()
     threading.Thread(target=updater, daemon=True).start()
+    threading.Thread(target=lobby_watcher, daemon=True).start()
     print(f"Ranking de {TITLE} v{VERSION} escuchando en el puerto {PORT}", flush=True)
     server.serve_forever()
 
