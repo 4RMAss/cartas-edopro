@@ -54,7 +54,7 @@ URL_BASE = CHARS_URL[:-len("personajes.json")] if CHARS_URL.endswith("personajes
 SELF_PATH = os.path.abspath(__file__)
 UPDATE_MARK = SELF_PATH + ".actualizado"
 REJECTED = SELF_PATH + ".rechazada"  # huella de una versión que falló al arrancar (no se reinstala)
-VERSION = "3.7"
+VERSION = "3.8"
 TZ = timezone(timedelta(hours=int(os.environ.get("RANKING_TZ_HOURS", "-5"))))  # Lima
 KEEP_DAYS = int(os.environ.get("RANKING_KEEP_DAYS", "90"))
 MIN_PCT = int(os.environ.get("RANKING_MIN_PCT", "40"))  # parecido mínimo para asignar personaje
@@ -75,6 +75,16 @@ REASONS = {
     0x04: "Desconexión",
     0x05: "Respuesta inválida",
     0x06: "Error del servidor",
+}
+# Cartas que hacen ganar el duelo por su efecto (código de victoria -> carta)
+WIN_CARDS = {
+    0x10: "Exodia the Forbidden One", 0x11: "Final Countdown", 0x12: "Vennominaga the Deity of Poisonous Snakes",
+    0x13: "Holactie the Creator of Light", 0x14: "Exodius the Ultimate Forbidden Lord", 0x15: "Destiny Board",
+    0x16: "Last Turn", 0x17: "Number 88: Gimmick Puppet of Leo", 0x18: "Number C88: Gimmick Puppet Disaster Leo",
+    0x19: "Jackpot 7", 0x1a: "Relay Soul", 0x1b: "Ghostrick Angel of Mischief", 0x1c: "Phantasm Spiral Assault",
+    0x1d: "F.A. Winners", 0x1e: "Flying Elephant", 0x1f: "Exodia, the Legendary Defender", 0x21: "Exodia",
+    0x22: "Final Draw", 0x52: "Number iC1000: Numerounius Numerounia", 0x54: "Deuce", 0x56: "Deck Master",
+    0x57: "Draw of Fate",
 }
 HEADER = struct.Struct("<IIIIII8sQ4Q")  # ExtendedReplayHeader de Multirole (72 bytes)
 REPLAY_YRPX = 0x58707279
@@ -1012,6 +1022,7 @@ border:2px solid #ffd56b;box-sizing:border-box;vertical-align:middle}
 .champ{display:flex;gap:12px;align-items:center;background:#3a3216;border-radius:12px;padding:10px 12px;margin:10px 0}
 .champ .who{font-size:1.1rem;font-weight:800;color:#ffe9a8}.champ .pics{display:flex;gap:6px}
 .podium .pics{display:flex;gap:6px;justify-content:center;margin-bottom:4px}
+.how{font-size:.84rem;color:#c9d3f2;margin-top:3px}.how.chk{color:#ffb3b3}
 form.sign{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}form.sign input{flex:1;min-width:150px;background:#0f1320;
 color:#e8ecf5;border:1px solid #3c4878;border-radius:7px;padding:7px}
 """
@@ -1072,6 +1083,46 @@ def replay_exists(fn):
     return bool(re.fullmatch(r"\d+\.yrpX", fn)) and os.path.isfile(os.path.join(REPLAYS, fn))
 
 
+def how_it_ended(d):
+    """Frase que explica cómo terminó el duelo (quién ganó y por qué), con el resultado original.
+    Devuelve (texto, aviso): aviso=True en los casos que conviene revisar (desconexión, fallos)."""
+    w, r = d["winner"], d["reason"] or 0
+
+    def who(side):
+        names = d["team" + str(side)]
+        return names[0] if len(names) == 1 else "el equipo de " + " y ".join(names)
+    if w == 2:
+        text, warn = "Empate", False
+    elif w not in (0, 1):
+        text, warn = "El duelo terminó sin ganador", True
+    else:
+        winner, loser = who(w), who(1 - w)
+        lose = {
+            0x00: (f"{loser} se rindió", False),
+            0x01: ("los LP " + ("del " + loser[3:] if loser.startswith("el ") else "de " + loser) + " llegaron a 0", False),
+            0x02: (f"{loser} se quedó sin cartas para robar", False),
+            0x03: (("al " + loser[3:] if loser.startswith("el ") else "a " + loser) + " se le acabó el tiempo", False),
+            0x04: (f"{loser} perdió por desconexión (se le cerró el juego o se le cayó la conexión)", True),
+            0x05: (f"el juego de {loser} envió una respuesta inválida (fallo del programa)", True),
+            0x06: ("hubo un error del servidor y se le dio la derrota " + ("al " + loser[3:] if loser.startswith("el ") else "a " + loser), True),
+        }
+        if r in lose:
+            why, warn = lose[r]
+            text = f"Ganó {winner}: {why}"
+        elif r >= 0x10:
+            card = WIN_CARDS.get(r)
+            text = f"Ganó {winner} con el efecto de «{card}»" if card else f"Ganó {winner} por el efecto de una carta"
+            warn = False
+        else:
+            text, warn = f"Ganó {winner}", False
+    if d["annulled"]:
+        text += ". Duelo anulado por 4RMAss"
+    elif d["corrected"] is not None and d["corrected"] != w:
+        c = d["corrected"]
+        text += ". Resultado corregido por 4RMAss: " + ("empate" if c == 2 else f"ganó {who(c)}")
+    return text, warn
+
+
 def duel_line(d, period=None):
     f = None if d.get("disconnect") or d.get("test") else d["final"]
     delta = d.get("delta") or [None, None]
@@ -1082,13 +1133,9 @@ def duel_line(d, period=None):
         res = '· <span class="warn">Desconexión: no cuenta para el ranking</span>'
     if d.get("test"):
         res = '· <span class="warn">Sala de prueba: no cuenta para el ranking</span>'
-    why = REASONS.get(d["reason"], "Efecto de carta" if (d["reason"] or 0) >= 0x10 else "")
-    extra = []
-    if d["corrected"] is not None:
-        extra.append("corregido por 4RMAss")
-    if why:
-        extra.append(why)
-    meta = html.escape(" · ".join([fmt_ts(d["ts"])] + extra))
+    how, check = how_it_ended(d)
+    how_html = (f'<div class="how{" chk" if check else ""}">🏁 {html.escape(how)}</div>')
+    meta = html.escape(fmt_ts(d["ts"]))
     if replay_exists(d["file"]):
         meta += f' <a class="dl" href="/replay/{html.escape(d["file"])}" download>⬇ Repetición</a>'
     tour = (f' <a class="tour" style="text-decoration:none" href="/torneo{q(id=d["tour"]["id"])}">🏆 '
@@ -1100,7 +1147,7 @@ def duel_line(d, period=None):
                 shown = ", ".join(bad[:4]) + (f" y {len(bad) - 4} más" if len(bad) > 4 else "")
                 warns.append(f'<div class="muted" title="{html.escape(", ".join(bad))}"><span class="warn">⚠ Nerfeo</span> '
                              f'{html.escape(name)} usó: {html.escape(shown)}</div>')
-    return f'{a} <b>vs</b> {b} {res}{tour}<div class="muted">{meta}</div>{"".join(warns)}'
+    return f'{a} <b>vs</b> {b} {res}{tour}{how_html}<div class="muted">{meta}</div>{"".join(warns)}'
 
 
 def tier_badge(t):
