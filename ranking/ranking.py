@@ -31,6 +31,8 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+import io
+import zipfile
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -49,12 +51,13 @@ SALON = os.path.join(DATA_DIR, "salon_fama.json")
 ALIASES = os.path.join(DATA_DIR, "jugadores.json")
 CARDS = os.path.join(DATA_DIR, "cartas.json")
 IMGS = os.path.join(DATA_DIR, "personajes_img.json")
+ARTE = os.path.join(DATA_DIR, "personajes_arte.json")  # imágenes grandes para el cartel VS (opcional)
 # las demás direcciones salen de la de personajes.json (misma carpeta "ranking" del repositorio)
 URL_BASE = CHARS_URL[:-len("personajes.json")] if CHARS_URL.endswith("personajes.json") else ""
 SELF_PATH = os.path.abspath(__file__)
 UPDATE_MARK = SELF_PATH + ".actualizado"
 REJECTED = SELF_PATH + ".rechazada"  # huella de una versión que falló al arrancar (no se reinstala)
-VERSION = "3.8"
+VERSION = "3.9"
 TZ = timezone(timedelta(hours=int(os.environ.get("RANKING_TZ_HOURS", "-5"))))  # Lima
 KEEP_DAYS = int(os.environ.get("RANKING_KEEP_DAYS", "90"))
 MIN_PCT = int(os.environ.get("RANKING_MIN_PCT", "40"))  # parecido mínimo para asignar personaje
@@ -219,28 +222,30 @@ CHAR = Characters()
 
 class Portraits:
     """Imágenes de los personajes (personajes_img.json: nombre -> JPEG en base64)."""
-    def __init__(self):
+    def __init__(self, path=None):
+        self.path = path or IMGS
         self.mtime = None
         self.data = {}
 
     def load(self):
         try:
-            mtime = os.path.getmtime(IMGS)
+            mtime = os.path.getmtime(self.path)
         except OSError:
             self.data, self.mtime = {}, None
             return
         if mtime == self.mtime:
             return
         try:
-            raw = json.load(open(IMGS, encoding="utf-8"))
+            raw = json.load(open(self.path, encoding="utf-8"))
             self.data = {k: base64.b64decode(v) for k, v in raw.items() if not k.startswith("_")}
         except Exception as exc:
-            print("personajes_img.json no válido:", exc, flush=True)
+            print(os.path.basename(self.path), "no válido:", exc, flush=True)
             return
         self.mtime = mtime
 
 
 PORTRAITS = Portraits()
+ART = Portraits(ARTE)
 
 
 def fetch(url):
@@ -300,6 +305,14 @@ def updater():
                         os.utime(IMGS)
             except Exception as exc:
                 print("No se pudo actualizar personajes_img.json:", exc, flush=True)
+            try:
+                if not os.path.exists(ARTE) or time.time() - os.path.getmtime(ARTE) > 3600:
+                    data = fetch(URL_BASE + "personajes_arte.json")
+                    json.loads(data)
+                    if not save_if_changed(ARTE, data):
+                        os.utime(ARTE)
+            except Exception as exc:
+                print("No se pudo actualizar personajes_arte.json:", exc, flush=True)
         for url, path in files:
             if not url:
                 continue
@@ -411,6 +424,8 @@ def init_db():
                     "primary key(tid, key))")
         con.execute("create table if not exists test_rooms(id integer primary key autoincrement, names text, "
                     "notes text, first_seen integer, last_seen integer)")
+        con.execute("create table if not exists rooms(id integer primary key autoincrement, roomid integer, "
+                    "names text, best_of integer, first_seen integer, last_seen integer)")
 
 
 def scan_once():
@@ -453,10 +468,20 @@ def scanner():
         time.sleep(20)
 
 
+LIVE = {"rooms": [], "ts": 0}
+
+
+def live_rooms():
+    """Salas que están en duelo ahora mismo (según la última lectura de la lista de salas)."""
+    return list(LIVE["rooms"]) if time.time() - LIVE["ts"] < 30 else []
+
+
 def lobby_watcher():
     """Mira cada 5 segundos la lista de salas del servidor y apunta qué jugadores están en salas
     cuyas notas dicen «prueba» (o «test», «práctica»): esos duelos no cuentan para el ranking."""
     active = {}
+    playing = {}  # (roomid, nombres) -> id en la tabla rooms
+    started_at = {}
     warned = False
     while True:
         try:
@@ -464,9 +489,26 @@ def lobby_watcher():
                 data = json.loads(r.read().decode("utf-8", "replace"))
             now = int(time.time())
             seen = set()
+            seen_play = set()
+            live = []
             with db_lock, db() as con:
                 for room in data.get("rooms") or []:
                     notes = str(room.get("roomnotes") or "")
+                    users = [(str(u.get("name") or "").strip(), int(u.get("pos") or 0)) for u in room.get("users") or []]
+                    users = [u for u in users if u[0]]
+                    pnames = sorted({u[0].lower() for u in users})
+                    if room.get("istart") == "start" and len(pnames) >= 2:
+                        pkey = (room.get("roomid"), "|".join(pnames))
+                        seen_play.add(pkey)
+                        if pkey in playing:
+                            con.execute("update rooms set last_seen=? where id=?", (now, playing[pkey]))
+                        else:
+                            cur = con.execute("insert into rooms(roomid,names,best_of,first_seen,last_seen) values (?,?,?,?,?)",
+                                              (pkey[0], pkey[1], int(room.get("best_of") or 1), now, now))
+                            playing[pkey] = cur.lastrowid
+                            started_at[pkey] = now
+                        live.append({"key": pkey, "users": users, "t0": int(room.get("team1") or 1),
+                                     "best_of": int(room.get("best_of") or 1), "first_seen": started_at[pkey]})
                     if not TEST_WORDS.search(notes):
                         continue
                     names = sorted({str(u.get("name") or "").strip().lower() for u in room.get("users") or []} - {""})
@@ -483,6 +525,11 @@ def lobby_watcher():
             for k in list(active):
                 if k not in seen:
                     del active[k]
+            for k in list(playing):
+                if k not in seen_play:
+                    del playing[k]
+                    started_at.pop(k, None)
+            LIVE["rooms"], LIVE["ts"] = live, time.time()
             warned = False
         except Exception as exc:
             if not warned:
@@ -499,12 +546,15 @@ def load_duels(limit=None):
         rows = con.execute(q).fetchall()
         tests = [(set(t["names"].split("|")), t["first_seen"], t["last_seen"])
                  for t in con.execute("select names, first_seen, last_seen from test_rooms")]
+        rooms = [dict(t) for t in con.execute("select * from rooms where best_of>1 order by first_seen")]
     out = []
     amap = alias_map()
     for r in rows:
         d = dict(r)
         raw = {n.strip().lower() for n in json.loads(d["team0"]) + json.loads(d["team1"])}
         in_test_room = any(names == raw and first - 120 <= d["ts"] <= last + 600 for names, first, last in tests)
+        d["raw"] = raw
+        d["raw_names"] = [[n.strip().lower() for n in json.loads(d["team0"])], [n.strip().lower() for n in json.loads(d["team1"])]]
         d["team0"] = [canon(n, amap) for n in json.loads(d["team0"])]
         d["team1"] = [canon(n, amap) for n in json.loads(d["team1"])]
         decks = [json.loads(d.get("decks0") or "[]"), json.loads(d.get("decks1") or "[]")]
@@ -521,7 +571,59 @@ def load_duels(limit=None):
         d["test"] = in_test_room and d["corrected"] is None
         d["self"] = bool({n.lower() for n in d["team0"]} & {n.lower() for n in d["team1"]})
         out.append(d)
+    assign_matches(out, rooms)
     return out
+
+
+def assign_matches(duels, rooms):
+    """Marca los duelos jugados al mejor de 3 (o 5) en una misma sala como un match. Un match está
+    terminado cuando alguien llega a las victorias necesarias o cuando la sala ya se cerró."""
+    now = time.time()
+    live = {r["key"] for r in live_rooms()}
+    for rm in rooms:
+        names = set(rm["names"].split("|"))
+        ds = sorted((d for d in duels if d["raw"] == names and "match" not in d
+                     and rm["first_seen"] - 120 <= d["ts"] <= rm["last_seen"] + 600), key=lambda d: d["ts"])
+        if not ds:
+            continue
+        need = rm["best_of"] // 2 + 1
+        still_open = (rm["roomid"], rm["names"]) in live or now - rm["last_seen"] < 60
+
+        def close(group, done):
+            mid = group[0]["file"].split(".")[0]
+            for i, d in enumerate(group):
+                d["match"] = {"id": mid, "n": i + 1, "of": len(group), "done": done,
+                              "files": [x["file"] for x in group], "best_of": rm["best_of"]}
+
+        cur, wins = [], Counter()
+        for d in ds:
+            cur.append(d)
+            if d["winner"] in (0, 1):
+                for n in d["raw_names"][d["winner"]]:
+                    wins[n] += 1
+            if wins and max(wins.values()) >= need:
+                close(cur, True)
+                cur, wins = [], Counter()
+        if cur:
+            close(cur, not still_open)
+
+
+def match_files(mid):
+    """Repeticiones de un match terminado (o None si no existe o todavía se está jugando)."""
+    for d in load_duels():
+        m = d.get("match")
+        if m and m["id"] == mid:
+            return [f for f in m["files"] if replay_exists(f)] if m["done"] else None
+    return None
+
+
+def replay_locked(fn):
+    """True si la repetición es de un match que todavía no termina."""
+    for d in load_duels():
+        if d["file"] == fn:
+            m = d.get("match")
+            return bool(m and not m["done"])
+    return False
 
 
 DEFAULT_POINTS = {"SSS": 1800, "SS": 1700, "S": 1600, "A+": 1550, "A": 1500, "B": 1450, "C": 1400, "D": 1300}
@@ -985,6 +1087,25 @@ padding:4px 10px;font-size:.85rem;color:#c9d3f2;text-decoration:none}.tabs a.on{
 .bracket{display:flex;gap:14px;overflow-x:auto;padding:6px 2px 10px}
 .round{display:flex;flex-direction:column;justify-content:space-around;gap:10px;min-width:150px}
 .round h4{margin:0 0 4px;font-size:.82rem;color:#9fb3ff;text-align:center}
+.vs{position:relative;display:flex;height:170px;border-radius:14px;overflow:hidden;margin:10px 0 14px;background:#0b0e18;border:1px solid #2a3150;box-shadow:0 6px 24px #0009}
+.vs-side{position:relative;flex:1;overflow:hidden}
+.vs-l{clip-path:polygon(0 0,100% 0,86% 100%,0 100%);margin-right:-7%}
+.vs-r{clip-path:polygon(14% 0,100% 0,100% 100%,0 100%);margin-left:-7%}
+.vs-bg{position:absolute;inset:0;background-size:cover;background-position:center 22%;transform:scale(1.06);filter:saturate(1.15) contrast(1.05)}
+.vs-bg::after{content:"";position:absolute;inset:0}
+.vs-l .vs-bg::after{background:linear-gradient(100deg,#0b0e18ee 8%,#0b0e1833 55%,#b3203a66)}
+.vs-r .vs-bg::after{background:linear-gradient(260deg,#0b0e18ee 8%,#0b0e1833 55%,#1f56c066)}
+.vs-noimg{background:radial-gradient(circle at 50% 40%,#2a3458,#0d1020 70%)}
+.vs-tag{position:absolute;bottom:16px;z-index:1;padding:7px 14px;font:800 1.2rem/1.1 system-ui,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#fff;background:linear-gradient(90deg,#000c,#0007);text-shadow:0 2px 6px #000;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vs-l .vs-tag{left:0;border-left:5px solid #e2484f;border-radius:0 8px 8px 0}
+.vs-r .vs-tag{right:0;border-right:5px solid #4a8cff;border-radius:8px 0 0 8px;text-align:right;background:linear-gradient(270deg,#000c,#0007)}
+.vs-tag small{display:block;margin-top:3px;font:600 .72rem system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#c9d1e6}
+.vs-mid{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;text-align:center}
+.vs-mid b{display:grid;place-items:center;width:64px;height:64px;margin:auto;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#dfe5f5);color:#e0482f;font:900 1.55rem system-ui,sans-serif;font-style:italic;box-shadow:0 0 0 4px #0b0e18,0 0 26px #ff7a3caa}
+.vs-info{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:3;font-size:.72rem;color:#fff;background:#000c;border:1px solid #ffffff22;border-radius:10px;padding:3px 10px;white-space:nowrap}
+.live-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#ff3b3b;margin-right:8px;vertical-align:middle;animation:livepulse 1.4s infinite}
+@keyframes livepulse{0%{box-shadow:0 0 0 0 #ff3b3b99}70%{box-shadow:0 0 0 9px #ff3b3b00}100%{box-shadow:0 0 0 0 #ff3b3b00}}
+.dl.lock{color:#9aa3bd;font-size:.8rem}
 .match{background:#171c2e;border:1px solid #2a3150;border-radius:8px;font-size:.85rem}
 .match div{display:flex;justify-content:space-between;padding:5px 8px}.match div+div{border-top:1px solid #232a42}
 .match .w{color:#7ee2a1;font-weight:700}.match .tbd{color:#7f88a0;font-style:italic}
@@ -1064,6 +1185,66 @@ def avatar(char, cls="av"):
     return f'<span class="{cls} ini" title="{title}">{html.escape(initials(char))}</span>'
 
 
+def art_url(char):
+    if char in ART.data:
+        return f"/arte/{urllib.parse.quote(char)}.jpg?v={int(ART.mtime or 0)}"
+    if char in PORTRAITS.data:
+        return f"/img/{urllib.parse.quote(char)}.jpg?v={int(PORTRAITS.mtime or 0)}"
+    return None
+
+
+def live_html(duels=None):
+    """Duelos que se están jugando ahora: personaje de fondo y nombres delante."""
+    rooms = live_rooms()
+    if not rooms:
+        return ""
+    duels = duels if duels is not None else load_duels()
+    amap = alias_map()
+    last = {}  # nombre -> [(ts, personaje)] del más nuevo al más viejo
+    for d in duels:
+        for t in (0, 1):
+            for n, (ch, _pct) in zip(d["raw_names"][t], d["chars"][t]):
+                if ch:
+                    last.setdefault(n, []).append((d["ts"], ch))
+
+    def char_before(name, ts):
+        # el personaje de su último duelo ANTES de esta sala (así no se revela el deck del match en curso)
+        for t, ch in last.get(name.lower(), []):
+            if t < ts:
+                return ch
+        return None
+
+    cards = []
+    for rm in rooms:
+        sides = [[n for n, pos in rm["users"] if pos < rm["t0"]], [n for n, pos in rm["users"] if pos >= rm["t0"]]]
+        if not sides[0] or not sides[1]:
+            continue
+        mid = ""
+        if rm["best_of"] > 1:
+            names = set(rm["key"][1].split("|"))
+            ds = [d for d in duels if d["raw"] == names and d["ts"] >= rm["first_seen"] - 120]
+            w = [0, 0]
+            for d in ds:
+                if d["winner"] in (0, 1):
+                    won = set(d["raw_names"][d["winner"]])
+                    w[0 if won & {n.lower() for n in sides[0]} else 1] += 1
+            mid = f'<div class="vs-info">Match al mejor de {rm["best_of"]} · {w[0]} - {w[1]}</div>'
+        halves = []
+        for i, names in enumerate(sides):
+            ch = char_before(names[0], rm["first_seen"] - 120)
+            url = art_url(ch) if ch else None
+            bg = (f'<div class="vs-bg" style="background-image:url(\'{url}\')"></div>' if url
+                  else '<div class="vs-bg vs-noimg"></div>')
+            label = " & ".join(html.escape(canon(n, amap)) for n in names)
+            sub = f"<small>{html.escape(ch)}</small>" if ch else ""
+            halves.append(f'<div class="vs-side vs-{"lr"[i]}">{bg}<div class="vs-tag">{label}{sub}</div></div>')
+        cards.append(f'<div class="vs">{halves[0]}<div class="vs-mid"><b>VS</b></div>{halves[1]}{mid}</div>')
+    if not cards:
+        return ""
+    return ('<h2><span class="live-dot"></span>En vivo</h2><p class="sub">Se actualiza solo. El personaje es el '
+            'del último duelo de cada jugador antes de esta sala.</p>' + "".join(cards))
+
+
 def side_html(names, chars, won, delta=None, period=None):
     parts = []
     for name, (char, pct) in zip(names, chars):
@@ -1136,7 +1317,17 @@ def duel_line(d, period=None):
     how, check = how_it_ended(d)
     how_html = (f'<div class="how{" chk" if check else ""}">🏁 {html.escape(how)}</div>')
     meta = html.escape(fmt_ts(d["ts"]))
-    if replay_exists(d["file"]):
+    m = d.get("match")
+    if m and not m["done"]:
+        meta += f' <span class="dl lock">🔒 Duelo {m["n"]} de un match en curso: repeticiones al terminar</span>'
+    elif m:
+        if m["n"] == m["of"]:
+            if any(replay_exists(x) for x in m["files"]):
+                meta += (f' <a class="dl" href="/match/{html.escape(m["id"])}.zip" download>'
+                         f'⬇ Repeticiones del match ({m["of"]} duelos)</a>')
+        else:
+            meta += f' <span class="dl lock">🎬 Duelo {m["n"]} del match: repeticiones en su último duelo</span>'
+    elif replay_exists(d["file"]):
         meta += f' <a class="dl" href="/replay/{html.escape(d["file"])}" download>⬇ Repetición</a>'
     tour = (f' <a class="tour" style="text-decoration:none" href="/torneo{q(id=d["tour"]["id"])}">🏆 '
             f'{html.escape(d["tour"]["name"])}</a>' if d.get("tour") else "")
@@ -1754,6 +1945,8 @@ def render_public(params):
                   'Los duelos de torneo también suman, el doble, a la tabla general.</p>'
                   + tournaments_list_html(all_tours))
     body = f"""<h1>🏆 Ranking · {TITLE}</h1>
+<div id="vivo">{live_html(duels)}</div>
+<script>setInterval(function(){{fetch('/vivo').then(function(r){{return r.text()}}).then(function(t){{document.getElementById('vivo').innerHTML=t}}).catch(function(){{}})}},10000)</script>
 <p class="sub">Cada temporada es un año con 2 semestres: los puntos empiezan de cero en cada semestre y en cada
 temporada. Estás viendo: <b>{html.escape(period_label(key))}</b>.</p>
 {tabs_html(duels, key)}
@@ -1781,7 +1974,8 @@ parecido (desde un {MIN_PCT}% de parecido).</p>{chars_table(chars)}
 <p class="sub">El campeón de cada temporada y de cada semestre es quien termina con más puntos.</p>
 {seasons_html(duels)}
 <h2>Últimos duelos</h2>
-<p class="sub">⬇ Repetición: descarga el duelo para verlo en EDOPro (se guardan {KEEP_DAYS} días).
+<p class="sub">⬇ Repetición: descarga el duelo para verlo en EDOPro (se guardan {KEEP_DAYS} días). En los matches
+hay un solo botón con todas sus repeticiones (un .zip), y aparece recién cuando el match termina.
 ⚠ Nerfeo: el deck usó cartas nerfeadas para ese personaje; 4RMAss decide si lo anula.</p>{duel_html}
 <footer>Se cuenta por el nombre que usas en EDOPro. 4RMAss revisa y corrige los resultados. · v{VERSION}</footer>"""
     return page(body)
@@ -1940,6 +2134,8 @@ class Handler(BaseHTTPRequestHandler):
     def send_replay(self, fn):
         if not replay_exists(fn):
             return self.send_html(page("<p>Esa repetición ya no está guardada.</p>"), 404)
+        if replay_locked(fn):
+            return self.send_html(page("<p>Esa repetición es de un match que todavía se está jugando.</p>"), 403)
         data = open(os.path.join(REPLAYS, fn), "rb").read()
         self.send_response(200)
         self.send_header("Content-Type", "application/octet-stream")
@@ -1948,8 +2144,25 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def send_portrait(self, name):
-        data = PORTRAITS.data.get(urllib.parse.unquote(name))
+    def send_match(self, mid):
+        files = match_files(mid) if re.fullmatch(r"\d+", mid or "") else None
+        if not files:
+            return self.send_html(page("<p>Ese match todavía se está jugando o sus repeticiones ya no están guardadas.</p>"), 404)
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
+            for i, fn in enumerate(files, 1):
+                z.write(os.path.join(REPLAYS, fn), f"AnimeServer4RMAss-match{mid}-duelo{i}.yrpX")
+        data = buf.getvalue()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Disposition", f'attachment; filename="AnimeServer4RMAss-match-{mid}.zip"')
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def send_portrait(self, name, store=None):
+        store = store or PORTRAITS
+        data = store.data.get(urllib.parse.unquote(name))
         if data is None:
             return self.send_html(page("<p>No existe esta imagen.</p>"), 404)
         self.send_response(200)
@@ -1963,6 +2176,7 @@ class Handler(BaseHTTPRequestHandler):
         CHAR.load()
         NERF.load()
         PORTRAITS.load()
+        ART.load()
         url = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(url.query)
         path = url.path
@@ -1974,6 +2188,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(render_tournament(params))
         elif path.startswith("/replay/"):
             self.send_replay(path[len("/replay/"):])
+        elif path == "/vivo":
+            self.send_html(live_html())
+        elif path.startswith("/match/") and path.endswith(".zip"):
+            self.send_match(path[len("/match/"):-len(".zip")])
+        elif path.startswith("/arte/") and path.endswith(".jpg"):
+            self.send_portrait(path[len("/arte/"):-len(".jpg")], ART)
         elif path.startswith("/img/") and path.endswith(".jpg"):
             self.send_portrait(path[len("/img/"):-len(".jpg")])
         elif path == "/admin":
