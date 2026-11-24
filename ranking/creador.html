@@ -175,7 +175,7 @@ footer{margin-top:28px;color:var(--muted);font-size:.76rem;border-top:1px solid 
         <fieldset id="monsterFields">
           <div class="row only-manga">
             <div class="field"><label for="layout">Diseño del monstruo</label>
-              <select id="layout"><option value="manga">Manga: texto + ATTACK/DEFENSE</option><option value="boxes">Cuadros grandes ATK/DEF</option></select></div>
+              <select id="layout"><option value="manga">Manga: texto + ATK/DEF</option><option value="boxes">Cuadros grandes ATK/DEF</option></select></div>
             <label class="chip" id="showAttrWrap" style="align-self:flex-end"><input type="checkbox" id="showAttr"><span>Mostrar atributo</span></label>
           </div>
           <div class="field" id="levelField">
@@ -214,7 +214,7 @@ footer{margin-top:28px;color:var(--muted);font-size:.76rem;border-top:1px solid 
         <div class="field"><label for="desc">Descripción / efecto</label><textarea id="desc" rows="4" maxlength="1500" placeholder="Describe el efecto de tu carta…"></textarea>
           <span class="note" id="descNote">En monstruos de efecto, ritual y fusión es opcional: si escribes algo, aparece debajo del arte. Los monstruos normales llevan el arte grande y el ATK/DEF abajo a la derecha, sin texto.</span></div>
         <div class="field" style="flex:0 0 auto"><label for="cardLang">Idioma de las etiquetas</label>
-          <select id="cardLang"><option value="en">Inglés (SPELL CARD · ATTACK/DEFENSE)</option><option value="es">Español (CARTA MÁGICA · ATAQUE/DEFENSA)</option><option value="ja">Japonés (魔法カード · 攻撃力/守備力)</option></select></div>
+          <select id="cardLang"><option value="en">Inglés (SPELL CARD)</option><option value="es">Español (CARTA MÁGICA)</option><option value="ja">Japonés (魔法カード · 攻撃力/守備力)</option></select></div>
         <div class="row only-anime">
           <div class="field" style="flex:1 1 160px"><label for="setCode">Código de set</label><input id="setCode" type="text" maxlength="16" placeholder="MCM-EN001"></div>
           <label class="chip" style="align-self:flex-end"><input type="checkbox" id="showPass"><span>Mostrar el ID abajo a la izquierda</span></label>
@@ -1008,11 +1008,11 @@ function drawMangaMonster(ctx, S, opts, F, bw, INK) {
     lines.forEach((l, i) => ctx.fillText(l, tb.x, tb.y + size * .92 + i * size * 1.16));
   }
 
-  // ATTACK/xxxx DEFENSE/xxxx
+  // ATK/xxxx DEF/xxxx
   const en = state.cardLang !== 'es';
   ctx.font = `700 92px ${SER}`; ctx.fillStyle = INK;
-  cond(`${en ? 'ATTACK' : 'ATAQUE'}/${state.atk || '0'}`, 104, 1408, 380, 'left', .78);
-  cond(state.frame === 'link' ? `LINK-${linkCount()}` : `${en ? 'DEFENSE' : 'DEFENSA'}/${state.def || '0'}`, 896, 1408, 380, 'right', .78);
+  cond(`ATK/${state.atk || '0'}`, 104, 1408, 380, 'left', .78);
+  cond(state.frame === 'link' ? `LINK-${linkCount()}` : `DEF/${state.def || '0'}`, 896, 1408, 380, 'right', .78);
 }
 
 // Normal monsters: ATK over DEF, stacked in the lower-right corner
@@ -1020,7 +1020,7 @@ function drawStackedStats(ctx, SER, INK, cond) {
   const L = state.cardLang;
   const rows = L === 'ja'
     ? [['攻撃力', 'こうげきりょく', state.atk], ['守備力', 'しゅびりょく', state.def]]
-    : [[L === 'es' ? 'ATAQUE' : 'ATTACK', '', state.atk], [L === 'es' ? 'DEFENSA' : 'DEFENSE', '', state.def]];
+    : [['ATK', '', state.atk], ['DEF', '', state.def]];
   const labelX = 410, valueR = 896, base = [1286, 1408];
   ctx.fillStyle = INK; ctx.textBaseline = 'alphabetic';
   rows.forEach(([lab, ruby, val], i) => {
