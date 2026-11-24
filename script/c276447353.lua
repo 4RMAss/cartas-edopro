@@ -26,6 +26,17 @@ function s.initial_effect(c)
 	e3:SetCondition(function(e) return e:GetHandler():GetFlagEffect(id)>0 end)
 	e3:SetTarget(s.nogytarget)
 	c:RegisterEffect(e3)
+	--If one of their cards is destroyed, it is banished instead of going to the Graveyard
+	local e4=Effect.CreateEffect(c)
+	e4:SetType(EFFECT_TYPE_FIELD)
+	e4:SetProperty(EFFECT_FLAG_SET_AVAILABLE+EFFECT_FLAG_IGNORE_IMMUNE)
+	e4:SetCode(EFFECT_TO_GRAVE_REDIRECT)
+	e4:SetRange(LOCATION_SZONE)
+	e4:SetTargetRange(LOCATION_ALL,LOCATION_ALL)
+	e4:SetCondition(function(e) return e:GetHandler():GetFlagEffect(id)>0 end)
+	e4:SetTarget(function(e,c) return s.nogytarget(e,c) and c:IsReason(REASON_DESTROY) end)
+	e4:SetValue(LOCATION_REMOVED)
+	c:RegisterEffect(e4)
 end
 --flag label = player who gains LP; the other player has no Graveyard
 function s.activate(e,tp,eg,ep,ev,re,r,rp)
