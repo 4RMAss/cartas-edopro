@@ -15,7 +15,7 @@ function s.initial_effect(c)
 end
 function s.spcon(e,tp,eg,ep,ev,re,r,rp)
 	local de,dp=Duel.GetChainInfo(ev,CHAININFO_DISABLE_REASON,CHAININFO_DISABLE_PLAYER)
-	return rp==1-tp and dp==tp and de and de:IsHasType(EFFECT_TYPE_ACTIVATE) and de:GetHandler():IsType(TYPE_COUNTER)
+	return rp==1-tp and dp==tp and de and de:IsActiveType(TYPE_TRAP)
 end
 function s.sptg(e,tp,eg,ep,ev,re,r,rp,chk)
 	local c=e:GetHandler()
