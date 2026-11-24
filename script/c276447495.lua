@@ -1,0 +1,33 @@
+--Tamtam the Melodious Diva (Anime)
+--Script: 4RMAss · Anime Server by 4RMAss
+local s,id=GetID()
+function s.initial_effect(c)
+	local e1=Effect.CreateEffect(c)
+	e1:SetDescription(aux.Stringid(id,0))
+	e1:SetCategory(CATEGORY_DAMAGE+CATEGORY_ATKCHANGE)
+	e1:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_F)
+	e1:SetProperty(EFFECT_FLAG_DELAY)
+	e1:SetCode(EVENT_BE_MATERIAL)
+	e1:SetCondition(function(e,tp,eg,ep,ev,re,r) return r&REASON_FUSION~=0 end)
+	e1:SetTarget(function(e,tp,eg,ep,ev,re,r,rp,chk)
+		if chk==0 then return true end
+		Duel.SetTargetPlayer(1-tp)
+		Duel.SetTargetParam(500)
+		Duel.SetOperationInfo(0,CATEGORY_DAMAGE,nil,0,1-tp,500)
+	end)
+	e1:SetOperation(function(e,tp)
+		local c=e:GetHandler()
+		local p,d=Duel.GetChainInfo(0,CHAININFO_TARGET_PLAYER,CHAININFO_TARGET_PARAM)
+		Duel.Damage(p,d,REASON_EFFECT)
+		local rc=c:GetReasonCard()
+		if rc and rc:IsFaceup() and rc:IsLocation(LOCATION_MZONE) then
+			local e1=Effect.CreateEffect(c)
+			e1:SetType(EFFECT_TYPE_SINGLE)
+			e1:SetCode(EFFECT_UPDATE_ATTACK)
+			e1:SetValue(-500)
+			e1:SetReset(RESET_EVENT|RESETS_STANDARD)
+			rc:RegisterEffect(e1)
+		end
+	end)
+	c:RegisterEffect(e1)
+end
