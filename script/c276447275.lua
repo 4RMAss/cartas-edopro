@@ -16,12 +16,12 @@ function s.initial_effect(c)
 	e1:SetTarget(s.sptg)
 	e1:SetOperation(s.spop)
 	c:RegisterEffect(e1)
-	--Transfer attacks on this card to a "Blackwing" monster you control
+	--Transfer attacks on this card to a "Blackwing" monster you control (mandatory)
 	local e2=Effect.CreateEffect(c)
 	e2:SetDescription(aux.Stringid(id,1))
-	e2:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
+	e2:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_F)
 	e2:SetCode(EVENT_BE_BATTLE_TARGET)
-	e2:SetTarget(s.cbtg)
+	e2:SetCondition(s.cbcon)
 	e2:SetOperation(s.cbop)
 	c:RegisterEffect(e2)
 end
@@ -44,8 +44,9 @@ end
 function s.cbfilter(c,tp)
 	return c:IsControler(tp) and c:IsFaceup() and c:IsSetCard(SET_BLACKWING)
 end
-function s.cbtg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return Duel.GetAttacker():GetAttackableTarget():IsExists(s.cbfilter,1,e:GetHandler(),tp) end
+function s.cbcon(e,tp,eg,ep,ev,re,r,rp)
+	local a=Duel.GetAttacker()
+	return a and a:IsControler(1-tp) and a:GetAttackableTarget():IsExists(s.cbfilter,1,e:GetHandler(),tp)
 end
 function s.cbop(e,tp,eg,ep,ev,re,r,rp)
 	local a=Duel.GetAttacker()

@@ -20,9 +20,9 @@ function s.initial_effect(c)
 	c:RegisterEffect(e2)
 end
 s.listed_series={0x40}
-s.listed_names={id}
+s.listed_names={69873498}
 function s.cfilter(c)
-	return c:IsFaceup() and c:IsCode(id) and c:IsAbleToGraveAsCost()
+	return c:IsFaceup() and c:IsCode(69873498) and c:IsAbleToGraveAsCost()
 end
 function s.cost(e,tp,eg,ep,ev,re,r,rp,chk)
 	local c=e:GetHandler()
