@@ -51,13 +51,14 @@ SALON = os.path.join(DATA_DIR, "salon_fama.json")
 ALIASES = os.path.join(DATA_DIR, "jugadores.json")
 CARDS = os.path.join(DATA_DIR, "cartas.json")
 IMGS = os.path.join(DATA_DIR, "personajes_img.json")
+CREADOR = os.path.join(DATA_DIR, "creador.html")  # creador de cartas manga (solo admin)
 ARTE = os.path.join(DATA_DIR, "personajes_arte.json")  # imágenes grandes para el cartel VS (opcional)
 # las demás direcciones salen de la de personajes.json (misma carpeta "ranking" del repositorio)
 URL_BASE = CHARS_URL[:-len("personajes.json")] if CHARS_URL.endswith("personajes.json") else ""
 SELF_PATH = os.path.abspath(__file__)
 UPDATE_MARK = SELF_PATH + ".actualizado"
 REJECTED = SELF_PATH + ".rechazada"  # huella de una versión que falló al arrancar (no se reinstala)
-VERSION = "3.9"
+VERSION = "3.10"
 TZ = timezone(timedelta(hours=int(os.environ.get("RANKING_TZ_HOURS", "-5"))))  # Lima
 KEEP_DAYS = int(os.environ.get("RANKING_KEEP_DAYS", "90"))
 MIN_PCT = int(os.environ.get("RANKING_MIN_PCT", "40"))  # parecido mínimo para asignar personaje
@@ -313,6 +314,12 @@ def updater():
                         os.utime(ARTE)
             except Exception as exc:
                 print("No se pudo actualizar personajes_arte.json:", exc, flush=True)
+            try:  # el creador de cartas (HTML): se revisa en cada vuelta, cada 10 minutos
+                data = fetch(URL_BASE + "creador.html")
+                if b"<html" in data[:2000].lower():
+                    save_if_changed(CREADOR, data)
+            except Exception as exc:
+                print("No se pudo actualizar creador.html:", exc, flush=True)
         for url, path in files:
             if not url:
                 continue
@@ -2083,6 +2090,7 @@ def render_admin():
             signs.append(f'<div class="duel"><b>{html.escape(t["name"])}</b> · inscritos: {btns}</div>')
     signs_html = ("<h2>Inscripciones a torneos</h2>" + "".join(signs)) if signs else ""
     body = f"""<h1>Administrar resultados</h1>
+<p><a class="dl" href="/creador">🎴 Creador de cartas manga</a></p>
 <p><a href="/admin/respaldo">⬇ Descargar copia de seguridad de los resultados</a>
 <span class="muted">(guárdala en tu PC o en Drive; si algún día se pierde el servidor, con ella se recupera todo)</span></p>
 {signs_html}
@@ -2200,6 +2208,14 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authorized():
                 return self.ask_auth()
             self.send_html(render_admin())
+        elif path == "/creador":
+            if not self.authorized():
+                return self.ask_auth()
+            try:
+                self.send_html(open(CREADOR, encoding="utf-8").read())
+            except OSError:
+                self.send_html(page("<p>El creador de cartas todavía no se ha descargado del repositorio. "
+                                    "Prueba en unos minutos.</p>"), 503)
         elif path == "/admin/respaldo":
             if not self.authorized():
                 return self.ask_auth()
