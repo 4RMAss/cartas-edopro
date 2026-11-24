@@ -51,14 +51,14 @@ SALON = os.path.join(DATA_DIR, "salon_fama.json")
 ALIASES = os.path.join(DATA_DIR, "jugadores.json")
 CARDS = os.path.join(DATA_DIR, "cartas.json")
 IMGS = os.path.join(DATA_DIR, "personajes_img.json")
-CREADOR = os.path.join(DATA_DIR, "creador.html")  # creador de cartas manga (solo admin)
+CREADOR = os.path.join(DATA_DIR, "creador.html")  # creador de cartas manga (abierto con el enlace)
 ARTE = os.path.join(DATA_DIR, "personajes_arte.json")  # imágenes grandes para el cartel VS (opcional)
 # las demás direcciones salen de la de personajes.json (misma carpeta "ranking" del repositorio)
 URL_BASE = CHARS_URL[:-len("personajes.json")] if CHARS_URL.endswith("personajes.json") else ""
 SELF_PATH = os.path.abspath(__file__)
 UPDATE_MARK = SELF_PATH + ".actualizado"
 REJECTED = SELF_PATH + ".rechazada"  # huella de una versión que falló al arrancar (no se reinstala)
-VERSION = "3.10"
+VERSION = "3.11"
 TZ = timezone(timedelta(hours=int(os.environ.get("RANKING_TZ_HOURS", "-5"))))  # Lima
 KEEP_DAYS = int(os.environ.get("RANKING_KEEP_DAYS", "90"))
 MIN_PCT = int(os.environ.get("RANKING_MIN_PCT", "40"))  # parecido mínimo para asignar personaje
@@ -2208,9 +2208,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authorized():
                 return self.ask_auth()
             self.send_html(render_admin())
-        elif path == "/creador":
-            if not self.authorized():
-                return self.ask_auth()
+        elif path == "/creador":  # abierto: cualquiera con el enlace puede entrar
             try:
                 self.send_html(open(CREADOR, encoding="utf-8").read())
             except OSError:
