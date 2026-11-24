@@ -27,11 +27,12 @@ function s.initial_effect(c)
 	c:RegisterEffect(e2)
 end
 function s.dircon(e,tp,eg,ep,ev,re,r,rp)
-	return Duel.GetAttacker():IsControler(1-tp) and Duel.GetAttackTarget()==nil
+	return Duel.GetAttacker():IsControler(1-tp) and Duel.GetAttackTarget()==nil and s.once(e,tp)
 end
 function s.dirtg(e,tp,eg,ep,ev,re,r,rp,chk)
 	local c=e:GetHandler()
 	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_MZONE)>0 and c:IsCanBeSpecialSummoned(e,0,tp,false,false) end
+	Duel.RegisterFlagEffect(tp,id,RESET_PHASE|PHASE_DAMAGE,0,1)
 	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,c,1,0,0)
 end
 function s.dirop(e,tp,eg,ep,ev,re,r,rp)
@@ -46,10 +47,11 @@ function s.dirop(e,tp,eg,ep,ev,re,r,rp)
 	if c:IsRelateToEffect(e) then Duel.SpecialSummon(c,0,tp,tp,false,false,POS_FACEUP) end
 end
 function s.con(e,tp,eg,ep,ev,re,r,rp)
-	return Duel.GetAttackTarget()==e:GetHandler()
+	return Duel.GetAttackTarget()==e:GetHandler() and s.once(e,tp)
 end
 function s.target(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return true end
+	Duel.RegisterFlagEffect(tp,id,RESET_PHASE|PHASE_DAMAGE,0,1)
 	local val=Duel.GetAttacker():GetAttack()
 	Duel.SetTargetPlayer(1-tp)
 	Duel.SetTargetParam(val)
@@ -67,4 +69,7 @@ function s.op(e,tp,eg,ep,ev,re,r,rp)
 	local p,d=Duel.GetChainInfo(0,CHAININFO_TARGET_PLAYER,CHAININFO_TARGET_PARAM)
 	Duel.Recover(p,d,REASON_EFFECT)
 	Duel.SendtoHand(c,nil,REASON_EFFECT)
+end
+function s.once(e,tp)
+	return not e:GetHandler():IsStatus(STATUS_CHAINING) and Duel.GetFlagEffect(tp,id)==0
 end

@@ -6,9 +6,14 @@ function s.initial_effect(c)
 	e1:SetType(EFFECT_TYPE_ACTIVATE)
 	e1:SetCode(EVENT_CHAINING)
 	e1:SetProperty(EFFECT_FLAG_DAMAGE_STEP+EFFECT_FLAG_DAMAGE_CAL)
-	e1:SetCondition(function(e,tp,eg,ep,ev,re,r,rp) return re:IsHasCategory(CATEGORY_COIN|CATEGORY_DICE) end)
+	e1:SetCondition(s.condition)
 	e1:SetOperation(s.activate)
 	c:RegisterEffect(e1)
+end
+--cards that toss coins / roll dice are marked by their scripts (toss_coin / roll_dice) or by their category
+function s.condition(e,tp,eg,ep,ev,re,r,rp)
+	local rc=re:GetHandler()
+	return re:IsHasCategory(CATEGORY_COIN|CATEGORY_DICE) or (rc and (rc.toss_coin or rc.roll_dice))
 end
 function s.activate(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
@@ -27,11 +32,12 @@ function s.diceop(e,tp,eg,ep,ev,re,r,rp)
 	if e:GetLabel()~=0 then return end
 	e:SetLabel(1)
 	Duel.Hint(HINT_CARD,0,id)
-	local prev={Duel.GetDiceResult()}
-	Duel.TossDice(ep,ev&0xff,ev>>16)
+	--redo the roll: every die gets a new result, never the same as before
 	local res={Duel.GetDiceResult()}
 	for i=1,#res do
-		if res[i]==prev[i] then res[i]=res[i]%6+1 end
+		local n=Duel.GetRandomNumber(1,5)
+		if n>=res[i] then n=n+1 end
+		res[i]=n
 	end
 	Duel.SetDiceResult(table.unpack(res))
 end

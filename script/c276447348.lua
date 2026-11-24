@@ -31,8 +31,13 @@ function s.initial_effect(c)
 	c:RegisterEffect(e3)
 end
 s.listed_series={SET_TOY}
+--"Toy" monsters: the "Toy" archetype plus every version of "Toy Soldier" (manga/anime ones have no archetype code)
+local TOY_SOLDIERS={65504487,511000005,511002635,511600241}
+function s.istoy(c)
+	return c:IsSetCard(SET_TOY) or c:IsCode(table.unpack(TOY_SOLDIERS))
+end
 function s.rmfilter(c)
-	return c:IsSetCard(SET_TOY) and c:IsMonster() and (c:IsLocation(LOCATION_HAND) or c:IsFaceup()) and c:IsAbleToRemove(c:GetControler(),POS_FACEDOWN)
+	return s.istoy(c) and c:IsMonster() and (c:IsLocation(LOCATION_HAND) or c:IsFaceup()) and c:IsAbleToRemove(c:GetControler(),POS_FACEDOWN)
 end
 function s.target(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return Duel.IsExistingMatchingCard(s.rmfilter,tp,LOCATION_HAND|LOCATION_MZONE,0,1,nil) end

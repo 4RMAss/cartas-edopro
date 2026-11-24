@@ -2,12 +2,8 @@
 --Script: 4RMAss · Anime Server by 4RMAss
 local s,id=GetID()
 function s.initial_effect(c)
-	local e1=Effect.CreateEffect(c)
-	e1:SetType(EFFECT_TYPE_ACTIVATE)
-	e1:SetCode(EVENT_FREE_CHAIN)
-	e1:SetCondition(function() return Duel.GetCurrentPhase()==PHASE_MAIN1 end)
-	e1:SetOperation(s.activate)
-	c:RegisterEffect(e1)
+	--Equip Spell: it stays equipped after its effect is used
+	aux.AddEquipProcedure(c,0,nil,nil,nil,nil,s.activate,function() return Duel.IsPhase(PHASE_MAIN1) end)
 	aux.GlobalCheck(s,function()
 		local ge1=Effect.CreateEffect(c)
 		ge1:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)

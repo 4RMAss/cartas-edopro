@@ -35,18 +35,25 @@ function s.activate(e,tp,eg,ep,ev,re,r,rp)
 	e1:SetValue(oc:GetBaseAttack())
 	e1:SetReset(RESET_EVENT|RESETS_STANDARD|RESET_PHASE|PHASE_END)
 	tc:RegisterEffect(e1)
+	--If your selected monster destroys an opponent's monster by battle and sends it to the GY this turn:
+	--inflict damage equal to its ATK (also when your monster is destroyed in that same battle)
 	local e2=Effect.CreateEffect(c)
-	e2:SetDescription(aux.Stringid(id,0))
-	e2:SetCategory(CATEGORY_DAMAGE)
-	e2:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_F)
-	e2:SetCode(EVENT_BATTLE_DESTROYING)
-	e2:SetCondition(aux.bdogcon)
+	e2:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
+	e2:SetCode(EVENT_BATTLE_DESTROYED)
+	e2:SetLabelObject(tc)
 	e2:SetOperation(s.damop)
-	e2:SetReset(RESET_EVENT|RESETS_STANDARD|RESET_PHASE|PHASE_END)
-	tc:RegisterEffect(e2)
+	e2:SetReset(RESET_PHASE|PHASE_END)
+	Duel.RegisterEffect(e2,tp)
+end
+function s.damfilter(c,tc,tp)
+	return c:GetReasonCard()==tc and c:IsLocation(LOCATION_GRAVE) and c:IsPreviousControler(1-tp)
 end
 function s.damop(e,tp,eg,ep,ev,re,r,rp)
-	local bc=e:GetHandler():GetBattleTarget()
-	local atk=bc and math.max(bc:GetPreviousAttackOnField(),0) or 0
-	if atk>0 then Duel.Damage(1-tp,atk,REASON_EFFECT) end
+	local g=eg:Filter(s.damfilter,nil,e:GetLabelObject(),tp)
+	local dmg=0
+	for bc in g:Iter() do dmg=dmg+math.max(bc:GetPreviousAttackOnField(),0) end
+	if dmg>0 then
+		Duel.Hint(HINT_CARD,0,id)
+		Duel.Damage(1-tp,dmg,REASON_EFFECT)
+	end
 end

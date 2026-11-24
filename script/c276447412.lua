@@ -11,16 +11,17 @@ function s.initial_effect(c)
 	e2:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
 	e2:SetCode(EVENT_ADJUST)
 	e2:SetRange(LOCATION_SZONE)
-	e2:SetCondition(function(e) return e:GetHandler():IsFaceup() and Duel.IsExistingMatchingCard(s.filter,0,LOCATION_MZONE,LOCATION_MZONE,1,nil) end)
+	e2:SetCondition(function(e) return e:GetHandler():IsFaceup() and Duel.IsExistingMatchingCard(s.filter,0,LOCATION_MZONE,LOCATION_MZONE,1,nil,e) end)
 	e2:SetOperation(s.capop)
 	c:RegisterEffect(e2)
 end
-function s.filter(c)
-	return c:IsFaceup() and c:IsRace(RACE_DRAGON) and not c:IsImmuneToEffect(Effect.GlobalEffect())
+--Dragons that are unaffected by "Dragon Capture Jar" (e.g. freed by "Dragon Piper") are not captured again
+function s.filter(c,e)
+	return c:IsFaceup() and c:IsRace(RACE_DRAGON) and not c:IsImmuneToEffect(e)
 end
 function s.capop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
-	local g=Duel.GetMatchingGroup(s.filter,0,LOCATION_MZONE,LOCATION_MZONE,nil)
+	local g=Duel.GetMatchingGroup(s.filter,0,LOCATION_MZONE,LOCATION_MZONE,nil,e)
 	if #g==0 then return end
 	Duel.Hint(HINT_CARD,0,id)
 	for tc in g:Iter() do
