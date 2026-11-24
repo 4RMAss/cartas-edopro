@@ -110,6 +110,10 @@ body[data-mode="anime"] .only-manga, body[data-mode="manga"] .only-anime{display
 .arrows button{min-width:0;width:44px;height:44px;padding:0;font-size:1.2rem}
 .arrows button[aria-pressed="true"]{background:#c4441f;border-color:#ff9a4a;color:#fff}
 .arrows .mid{visibility:hidden}
+.secret{-webkit-text-security:disc;font-family:var(--f-mono)}
+.toksaved{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--well)}
+.tokinfo{font-family:var(--f-mono);font-size:.8rem;overflow-wrap:anywhere}
+.tokinfo .ok{color:var(--ok)} .tokinfo .bad{color:var(--warn)}
 details.gh{border:1px solid var(--line);border-radius:10px;background:var(--panel)}
 details.gh summary{cursor:pointer;padding:12px 14px;font-weight:600;list-style-position:inside}
 .ghbody{display:flex;flex-direction:column;gap:10px;padding:0 14px 14px}
@@ -286,7 +290,7 @@ footer{margin-top:28px;color:var(--muted);font-size:.76rem;border-top:1px solid 
         <p class="note">Para cartas del manga sin ilustración: describe el monstruo o sube una imagen de referencia y Gemini la dibuja. Después recorta al personaje y pásalo a la carta. La generación funciona en el archivo HTML abierto en tu navegador (dentro de Claude el visor bloquea la conexión con Gemini); el recorte funciona en los dos.</p>
 
         <div class="row">
-          <div class="field" style="flex:3 1 220px"><label for="gKey">Clave de API de Gemini</label><input id="gKey" type="password" autocomplete="off" spellcheck="false" placeholder="AIza…"></div>
+          <div class="field" style="flex:3 1 220px"><label for="gKey">Clave de API de Gemini</label><input id="gKey" name="mcm-gemini" type="text" class="secret" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" placeholder="AIza…"></div>
           <div class="field" style="flex:2 1 180px"><label for="gModel">Modelo</label><input id="gModel" type="text" list="gModels" spellcheck="false">
             <datalist id="gModels"><option value="gemini-2.5-flash-image"></option><option value="gemini-3-pro-image-preview"></option></datalist></div>
         </div>
@@ -372,10 +376,18 @@ footer{margin-top:28px;color:var(--muted);font-size:.76rem;border-top:1px solid 
         <summary>Configuración del repositorio</summary>
         <div class="ghbody">
           <p class="note">«Guardar en el repositorio» sube la carta como <code>pics/&lt;ID&gt;.png</code> y, en el mismo commit, borra la imagen anterior de esa carta (<code>.jpg</code>, <code>.jpeg</code>, <code>.webp</code>…). Funciona en el archivo HTML abierto en tu navegador; dentro de Claude el visor bloquea la conexión con GitHub.</p>
-          <div class="field"><label for="ghToken">Token de GitHub</label><input id="ghToken" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></div>
-          <div class="row">
-            <label class="chip"><input type="checkbox" id="ghRemember"><span>Recordar en este navegador</span></label>
-            <a class="btn" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Crear token ↗</a>
+          <div id="ghTokSaved" class="toksaved" hidden>
+            <div><div class="lbl">Token de GitHub</div><div id="ghTokInfo" class="tokinfo"></div></div>
+            <div class="row" style="gap:6px"><button id="ghTokCheck" type="button">Verificar</button><button id="ghTokChange" type="button">Cambiar token</button><button id="ghTokForget" type="button">Olvidar</button></div>
+          </div>
+          <div id="ghTokNew" style="display:flex;flex-direction:column;gap:10px">
+            <div class="field"><label for="ghTokenIn">Token de GitHub</label>
+              <input id="ghTokenIn" name="mcm-gh-pat" type="text" class="secret" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" placeholder="github_pat_…"></div>
+            <div class="row">
+              <button id="ghTokSave" class="primary" type="button" style="font-size:.9rem;padding:9px 14px">Guardar y verificar</button>
+              <label class="chip"><input type="checkbox" id="ghRemember"><span>Recordar en este navegador</span></label>
+              <a class="btn" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Crear token ↗</a>
+            </div>
           </div>
           <div class="row">
             <div class="field" style="flex:2 1 160px"><label for="ghRepo">Repositorio</label><input id="ghRepo" type="text" spellcheck="false"></div>
@@ -2027,20 +2039,84 @@ $('gSave').addEventListener('click', async () => {
 /* ---------- upload to GitHub: pics/<id>.png, replacing any older image of that card ---------- */
 const GH_KEY = 'mcm-gh-token';
 const ghNote = (t, kind) => { $('ghNote').className = 'note' + (kind ? ' ' + kind : ''); $('ghNote').textContent = t; };
-try { const t = localStorage.getItem(GH_KEY); if (t) { $('ghToken').value = t; $('ghRemember').checked = true; } } catch (e) {}
+// The token lives in memory (and localStorage if remembered). It is never read back from an input,
+// so browser password managers / autofill can't swap in an old value.
+let ghTok = '', ghTokMeta = null; // meta: { login, checkedAt, exp, ok, err }
+const GH_META = 'mcm-gh-token-meta';
+try {
+  ghTok = localStorage.getItem(GH_KEY) || '';
+  ghTokMeta = JSON.parse(localStorage.getItem(GH_META) || 'null');
+} catch (e) {}
+$('ghRemember').checked = true;
 $('ghRepo').value = state.ghRepo || '4RMAss/cartas-edopro';
 $('ghBranch').value = state.ghBranch || 'main';
 $('ghDir').value = state.ghDir || 'pics';
-function ghRememberToken() {
-  try { if ($('ghRemember').checked && $('ghToken').value.trim()) localStorage.setItem(GH_KEY, $('ghToken').value.trim()); else localStorage.removeItem(GH_KEY); } catch (e) {}
+function cleanToken(t) { return String(t || '').replace(/[\s​-‍⁠﻿"'`]/g, '').replace(/^(bearer|token)/i, ''); }
+const tokMask = t => t ? t.slice(0, 15) + '…' + t.slice(-4) : '';
+function saveTok() {
+  try {
+    if (ghTok && $('ghRemember').checked) { localStorage.setItem(GH_KEY, ghTok); localStorage.setItem(GH_META, JSON.stringify(ghTokMeta)); }
+    else { localStorage.removeItem(GH_KEY); localStorage.removeItem(GH_META); }
+  } catch (e) {}
 }
-$('ghRemember').addEventListener('change', ghRememberToken);
-$('ghToken').addEventListener('change', ghRememberToken);
+function showTok() {
+  const has = !!ghTok;
+  $('ghTokSaved').hidden = !has; $('ghTokNew').style.display = has ? 'none' : 'flex';
+  if (!has) return;
+  const m = ghTokMeta || {}, info = $('ghTokInfo'); info.replaceChildren();
+  const add = (t, cls) => { const sp = document.createElement('span'); if (cls) sp.className = cls; sp.textContent = t; info.append(sp); };
+  add(tokMask(ghTok));
+  if (m.ok) {
+    add(' · válido', 'ok');
+    if (m.exp) add(' · caduca ' + m.exp);
+    if (m.checkedAt) add(' · verificado ' + new Date(m.checkedAt).toLocaleString('es'));
+  } else if (m.err) add(' · ' + m.err, 'bad');
+  else add(' · sin verificar');
+}
+function tokRejectedMsg(m) {
+  return `GitHub rechazó el token ${tokMask(ghTok)}${m ? ' («' + m + '»)' : ''}. Pasa cuando el token caducó, cuando se borró o regeneró en GitHub (al regenerarlo, el anterior deja de valer), o cuando GitHub lo revoca por verlo publicado (por ejemplo, pegado en un repositorio, issue o chat público; te avisa por correo). Revisa tus tokens en github.com/settings/personal-access-tokens, crea uno nuevo y pulsa «Cambiar token».`;
+}
+async function verifyTok() {
+  if (!ghTok) return false;
+  const cfg = ghCfg();
+  ghNote('Verificando el token con GitHub…');
+  let r;
+  try {
+    r = await fetch(`https://api.github.com/repos/${cfg.repo}`, { cache: 'no-store', headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + ghTok, 'X-GitHub-Api-Version': '2022-11-28' } });
+  } catch (e) { ghNote('No hay conexión con GitHub desde aquí. Si estás dentro de Claude, abre el archivo HTML en tu navegador.', 'warn'); return false; }
+  const j = await r.json().catch(() => ({}));
+  const exp = r.headers.get('github-authentication-token-expiration');
+  if (r.ok) {
+    let expTxt = (ghTokMeta && ghTokMeta.exp) || '';
+    if (exp) { const d = new Date(exp.replace(' UTC', 'Z').replace(' ', 'T')); expTxt = isNaN(d) ? exp : d.toLocaleDateString('es'); }
+    ghTokMeta = { ok: true, checkedAt: Date.now(), exp: expTxt };
+    saveTok(); showTok(); ghNote(`Token válido con acceso a ${cfg.repo}.`, 'ok'); return true;
+  }
+  ghTokMeta = { ok: false, err: r.status === 401 ? 'GitHub lo rechaza (caducado, borrado o revocado)' : r.status === 404 ? `sin acceso a ${cfg.repo}` : `error ${r.status}` };
+  saveTok(); showTok();
+  ghNote(r.status === 401 ? tokRejectedMsg(j.message) : r.status === 404
+    ? `El token es válido pero no tiene acceso a ${cfg.repo}. Al crearlo, en «Repository access» elige «Only select repositories» y marca ese repositorio.`
+    : `GitHub respondió ${r.status}${j.message ? ': ' + j.message : ''}.`, 'warn');
+  return false;
+}
+$('ghTokSave').addEventListener('click', async () => {
+  const t = cleanToken($('ghTokenIn').value);
+  if (!t) { ghNote('Pega el token en el campo.', 'warn'); return; }
+  if (!/^(github_pat_|ghp_)[A-Za-z0-9_]{20,}$/.test(t)) { ghNote('Eso no parece un token de GitHub: debe empezar por «github_pat_» (o «ghp_»). Copia el token completo, no su nombre ni tu contraseña.', 'warn'); return; }
+  ghTok = t; ghTokMeta = null; $('ghTokenIn').value = '';
+  saveTok(); showTok(); await verifyTok();
+});
+$('ghTokenIn').addEventListener('keydown', e => { if (e.key === 'Enter') $('ghTokSave').click(); });
+$('ghTokCheck').addEventListener('click', verifyTok);
+$('ghTokChange').addEventListener('click', () => { ghTok = ''; ghTokMeta = null; saveTok(); showTok(); $('ghTokenIn').focus(); ghNote('Pega el token nuevo y pulsa «Guardar y verificar».'); });
+$('ghTokForget').addEventListener('click', () => { ghTok = ''; ghTokMeta = null; saveTok(); showTok(); ghNote('Token olvidado en este navegador.'); });
+$('ghRemember').addEventListener('change', saveTok);
+showTok();
 ['ghRepo', 'ghBranch', 'ghDir'].forEach(k => $(k).addEventListener('change', e => { state[k] = e.target.value.trim(); persist(); $('ghPlan').hidden = true; }));
 const IMG_EXT = /\.(png|jpe?g|webp|gif|bmp)$/i;
 function ghCfg() {
   const repo = $('ghRepo').value.trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/, '').replace(/\/+$/, '');
-  return { token: $('ghToken').value.trim(), repo, branch: $('ghBranch').value.trim() || 'main', dir: $('ghDir').value.trim().replace(/^\/+|\/+$/g, '') };
+  return { token: ghTok, repo, branch: $('ghBranch').value.trim() || 'main', dir: $('ghDir').value.trim().replace(/^\/+|\/+$/g, '') };
 }
 async function gh(cfg, path, opt = {}) {
   let r;
@@ -2053,7 +2129,7 @@ async function gh(cfg, path, opt = {}) {
   if (!r.ok) {
     const m = j.message || '';
     const err = new Error(
-      r.status === 401 ? 'El token no es válido o ha caducado.'
+      r.status === 401 ? (ghTokMeta = { ok: false, err: 'GitHub lo rechaza (caducado, borrado o revocado)' }, saveTok(), showTok(), tokRejectedMsg(m))
       : r.status === 403 ? 'El token no tiene permiso de escritura en este repositorio (necesita «Contents: Read and write»)' + (m ? ': ' + m : '.')
       : r.status === 404 ? `No se encontró ${cfg.repo} (rama «${cfg.branch}», carpeta «${cfg.dir}») o el token no tiene acceso a ese repositorio.`
       : `GitHub respondió ${r.status}${m ? ': ' + m : ''}.`);
@@ -2073,7 +2149,7 @@ const blobToB64 = b => new Promise((res, rej) => { const fr = new FileReader(); 
 $('ghPrep').addEventListener('click', async () => {
   const cfg = ghCfg(); $('ghPlan').hidden = true; ghPending = null;
   if (!state.cardId) { ghNote('La carta no tiene ID. Escríbelo en «ID / script» (el archivo se llamará así).', 'warn'); return; }
-  if (!cfg.token) { ghNote('Pega tu token de GitHub (botón «Crear token»).', 'warn'); return; }
+  if (!cfg.token) { $('ghBox').open = true; ghNote('Pega tu token de GitHub y pulsa «Guardar y verificar» (botón «Crear token» si aún no tienes uno).', 'warn'); return; }
   if (!/^[\w.-]+\/[\w.-]+$/.test(cfg.repo)) { ghNote('El repositorio debe tener la forma usuario/repositorio.', 'warn'); return; }
   $('ghPrep').disabled = true; ghNote('Revisando la carpeta en GitHub…');
   try {
@@ -2096,9 +2172,9 @@ $('ghPrep').addEventListener('click', async () => {
 });
 $('ghSave').addEventListener('click', () => {
   const box = $('ghBox'); box.open = true;
-  if (!$('ghToken').value.trim()) {
+  if (!ghTok) {
     ghNote('Para guardar en GitHub, pega primero tu token (botón «Crear token») y vuelve a pulsar «Guardar en el repositorio».', 'warn');
-    $('ghToken').focus(); box.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return;
+    $('ghTokenIn').focus(); box.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return;
   }
   $('ghPrep').click();
   setTimeout(() => box.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 50);
