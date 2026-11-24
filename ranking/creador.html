@@ -2073,8 +2073,36 @@ function showTok() {
   } else if (m.err) add(' · ' + m.err, 'bad');
   else add(' · sin verificar');
 }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function markTokOk() {
+  if (ghTokMeta && ghTokMeta.ok) return;
+  ghTokMeta = { ok: true, checkedAt: Date.now(), exp: (ghTokMeta && ghTokMeta.exp) || '' }; saveTok(); showTok();
+}
+function markTokBad() { ghTokMeta = { ok: false, err: 'GitHub lo rechaza (caducado, borrado o revocado)', exp: (ghTokMeta && ghTokMeta.exp) || '' }; saveTok(); showTok(); }
+// Is the token accepted right now? true / false (401) / null (no connection)
+async function probeTok(cfg) {
+  try { const r = await fetch(`https://api.github.com/repos/${cfg.repo}`, { cache: 'no-store', headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + cfg.token, 'X-GitHub-Api-Version': '2022-11-28' } }); return r.status === 401 ? false : true; }
+  catch (e) { return null; }
+}
+// Runs fn; on a 401 re-checks the token (twice, with pauses) and retries before giving up.
+async function ghAuthRetry(cfg, fn) {
+  try { return await fn(); }
+  catch (e) {
+    if (e.status !== 401) throw e;
+    let last = e;
+    for (const wait of [1500, 4000]) {
+      ghNote(`GitHub no aceptó el token al ${e.step || 'conectar'}; comprobando otra vez…`);
+      await sleep(wait);
+      const ok = await probeTok(cfg);
+      if (ok === null) break;
+      if (ok) { try { const res = await fn(); markTokOk(); return res; } catch (e2) { if (e2.status !== 401) throw e2; last = e2; } }
+    }
+    markTokBad();
+    const err = new Error(tokRejectedMsg(last.ghMessage)); err.status = 401; err.step = last.step; throw err;
+  }
+}
 function tokRejectedMsg(m) {
-  return `GitHub rechazó el token ${tokMask(ghTok)}${m ? ' («' + m + '»)' : ''}. Pasa cuando el token caducó, cuando se borró o regeneró en GitHub (al regenerarlo, el anterior deja de valer), o cuando GitHub lo revoca por verlo publicado (por ejemplo, pegado en un repositorio, issue o chat público; te avisa por correo). Revisa tus tokens en github.com/settings/personal-access-tokens, crea uno nuevo y pulsa «Cambiar token».`;
+  return `GitHub rechazó el token ${tokMask(ghTok)}${m ? ' («' + m + '»)' : ''}. Pasa cuando el token caducó, cuando se borró o regeneró en GitHub (al regenerarlo, el anterior deja de valer), o cuando GitHub lo revoca por verlo publicado (por ejemplo, pegado en un repositorio, issue o chat público; te avisa por correo). Antes de crear otro, pulsa «Verificar»: si vuelve a fallar, mira en github.com/settings/personal-access-tokens si sale como Expired o Revoked. Ojo: «Regenerate token» invalida el token guardado en tus otros dispositivos.`;
 }
 async function verifyTok() {
   if (!ghTok) return false;
@@ -2082,7 +2110,11 @@ async function verifyTok() {
   ghNote('Verificando el token con GitHub…');
   let r;
   try {
-    r = await fetch(`https://api.github.com/repos/${cfg.repo}`, { cache: 'no-store', headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + ghTok, 'X-GitHub-Api-Version': '2022-11-28' } });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      r = await fetch(`https://api.github.com/repos/${cfg.repo}`, { cache: 'no-store', headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + ghTok, 'X-GitHub-Api-Version': '2022-11-28' } });
+      if (r.status !== 401) break;
+      if (attempt < 2) { ghNote('GitHub no aceptó el token; comprobando otra vez…'); await sleep(attempt ? 4000 : 1500); }
+    }
   } catch (e) { ghNote('No hay conexión con GitHub desde aquí. Si estás dentro de Claude, abre el archivo HTML en tu navegador.', 'warn'); return false; }
   const j = await r.json().catch(() => ({}));
   const exp = r.headers.get('github-authentication-token-expiration');
@@ -2129,12 +2161,13 @@ async function gh(cfg, path, opt = {}) {
   if (!r.ok) {
     const m = j.message || '';
     const err = new Error(
-      r.status === 401 ? (ghTokMeta = { ok: false, err: 'GitHub lo rechaza (caducado, borrado o revocado)' }, saveTok(), showTok(), tokRejectedMsg(m))
+      r.status === 401 ? 'GitHub no aceptó el token' + (m ? ' («' + m + '»)' : '') + '.'
       : r.status === 403 ? 'El token no tiene permiso de escritura en este repositorio (necesita «Contents: Read and write»)' + (m ? ': ' + m : '.')
       : r.status === 404 ? `No se encontró ${cfg.repo} (rama «${cfg.branch}», carpeta «${cfg.dir}») o el token no tiene acceso a ese repositorio.`
       : `GitHub respondió ${r.status}${m ? ': ' + m : ''}.`);
-    err.status = r.status; throw err;
+    err.status = r.status; err.ghMessage = m; err.step = opt.step; throw err;
   }
+  if (cfg.token === ghTok) markTokOk();
   return j;
 }
 let ghPending = null;
@@ -2153,7 +2186,7 @@ $('ghPrep').addEventListener('click', async () => {
   if (!/^[\w.-]+\/[\w.-]+$/.test(cfg.repo)) { ghNote('El repositorio debe tener la forma usuario/repositorio.', 'warn'); return; }
   $('ghPrep').disabled = true; ghNote('Revisando la carpeta en GitHub…');
   try {
-    const list = await gh(cfg, `/repos/${cfg.repo}/contents/${cfg.dir.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(cfg.branch)}`);
+    const list = await ghAuthRetry(cfg, () => gh(cfg, `/repos/${cfg.repo}/contents/${cfg.dir.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(cfg.branch)}`, { step: 'leer la carpeta' }));
     const id = state.cardId, target = `${id}.png`;
     const same = (Array.isArray(list) ? list : []).filter(f => f.type === 'file' && IMG_EXT.test(f.name) && f.name.replace(IMG_EXT, '') === id);
     const replaces = same.filter(f => f.name === target);
@@ -2167,7 +2200,7 @@ $('ghPrep').addEventListener('click', async () => {
     if (!replaces.length && !deletes.length) parts.push('No hay ninguna imagen anterior con ese ID: se añadirá como nueva.');
     $('ghPlanText').textContent = parts.join(' ');
     $('ghPlan').hidden = false; ghNote('Revisa el cambio y confirma.');
-  } catch (e) { ghNote(e.message, 'warn'); }
+  } catch (e) { ghNote((e.message || String(e)) + (e.step ? ` [paso: ${e.step}]` : '') + ` · ${new Date().toLocaleTimeString('es')}`, 'warn'); }
   finally { $('ghPrep').disabled = false; }
 });
 $('ghSave').addEventListener('click', () => {
@@ -2189,27 +2222,27 @@ $('ghGo').addEventListener('click', async () => {
     const { cfg } = P, R = `/repos/${cfg.repo}`;
     const commitOnce = async () => {
       ghNote('Subiendo a GitHub…');
-      const ref = await gh(cfg, `${R}/git/ref/heads/${encodeURIComponent(cfg.branch)}`);
+      const ref = await gh(cfg, `${R}/git/ref/heads/${encodeURIComponent(cfg.branch)}`, { step: 'leer la rama' });
       const head = ref.object.sha;
-      const base = await gh(cfg, `${R}/git/commits/${head}`);
-      const blob = await gh(cfg, `${R}/git/blobs`, { method: 'POST', body: JSON.stringify({ content: b64, encoding: 'base64' }) });
-      const tree = await gh(cfg, `${R}/git/trees`, { method: 'POST', body: JSON.stringify({ base_tree: base.tree.sha, tree: [
+      const base = await gh(cfg, `${R}/git/commits/${head}`, { step: 'leer el último commit' });
+      const blob = await gh(cfg, `${R}/git/blobs`, { step: 'subir la imagen', method: 'POST', body: JSON.stringify({ content: b64, encoding: 'base64' }) });
+      const tree = await gh(cfg, `${R}/git/trees`, { step: 'preparar los archivos', method: 'POST', body: JSON.stringify({ base_tree: base.tree.sha, tree: [
         { path: `${cfg.dir}/${P.target}`, mode: '100644', type: 'blob', sha: blob.sha },
         ...P.deletes.map(n => ({ path: `${cfg.dir}/${n}`, mode: '100644', type: 'blob', sha: null })),
       ] }) });
       const msg = `Imagen de carta ${P.id}${P.name ? ' (' + P.name + ')' : ''}` + (P.deletes.length ? `\n\nReemplaza ${P.deletes.join(', ')} por ${P.target}.` : '');
-      const commit = await gh(cfg, `${R}/git/commits`, { method: 'POST', body: JSON.stringify({ message: msg, tree: tree.sha, parents: [head] }) });
-      await gh(cfg, `${R}/git/refs/heads/${encodeURIComponent(cfg.branch)}`, { method: 'PATCH', body: JSON.stringify({ sha: commit.sha }) });
+      const commit = await gh(cfg, `${R}/git/commits`, { step: 'crear el commit', method: 'POST', body: JSON.stringify({ message: msg, tree: tree.sha, parents: [head] }) });
+      await gh(cfg, `${R}/git/refs/heads/${encodeURIComponent(cfg.branch)}`, { step: 'actualizar la rama', method: 'PATCH', body: JSON.stringify({ sha: commit.sha }) });
       return commit;
     };
     let commit;
-    try { commit = await commitOnce(); }
-    catch (e) { if (e.status === 422 || e.status === 409) commit = await commitOnce(); else throw e; } // branch moved meanwhile: retry once on the new head
+    try { commit = await ghAuthRetry(cfg, commitOnce); }
+    catch (e) { if (e.status === 422 || e.status === 409) commit = await ghAuthRetry(cfg, commitOnce); else throw e; } // branch moved meanwhile: retry once on the new head
     $('ghPlan').hidden = true; ghPending = null;
     $('ghNote').className = 'note ok'; $('ghNote').textContent = `Listo: ${cfg.dir}/${P.target} subido` + (P.deletes.length ? ` y ${P.deletes.join(', ')} borrado${P.deletes.length > 1 ? 's' : ''}.` : '.') + ' ';
     const a = document.createElement('a'); a.href = `https://github.com/${cfg.repo}/commit/${commit.sha}`; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Ver commit'; a.style.color = 'var(--gold)';
     $('ghNote').append(a);
-  } catch (e) { ghNote(e.message || String(e), 'warn'); }
+  } catch (e) { ghNote((e.message || String(e)) + (e.step ? ` [paso: ${e.step}]` : '') + ` · ${new Date().toLocaleTimeString('es')}`, 'warn'); }
   finally { btn.disabled = false; }
 });
 
