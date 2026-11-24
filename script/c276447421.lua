@@ -1,4 +1,4 @@
---Rise of the Sacred Deity (Anime)
+--Rise of the Snake Deity (Anime)
 --Script: 4RMAss · Anime Server by 4RMAss
 --Basado en los scripts oficiales de Project Ignis (EDOPro), con licencia AGPL-3.0.
 local s,id=GetID()
