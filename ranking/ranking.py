@@ -58,7 +58,7 @@ URL_BASE = CHARS_URL[:-len("personajes.json")] if CHARS_URL.endswith("personajes
 SELF_PATH = os.path.abspath(__file__)
 UPDATE_MARK = SELF_PATH + ".actualizado"
 REJECTED = SELF_PATH + ".rechazada"  # huella de una versión que falló al arrancar (no se reinstala)
-VERSION = "3.11"
+VERSION = "3.12"
 TZ = timezone(timedelta(hours=int(os.environ.get("RANKING_TZ_HOURS", "-5"))))  # Lima
 KEEP_DAYS = int(os.environ.get("RANKING_KEEP_DAYS", "90"))
 MIN_PCT = int(os.environ.get("RANKING_MIN_PCT", "40"))  # parecido mínimo para asignar personaje
@@ -1952,6 +1952,7 @@ def render_public(params):
                   'Los duelos de torneo también suman, el doble, a la tabla general.</p>'
                   + tournaments_list_html(all_tours))
     body = f"""<h1>🏆 Ranking · {TITLE}</h1>
+<p><a class="dl" href="/creador">🎴 Creador de cartas</a></p>
 <div id="vivo">{live_html(duels)}</div>
 <script>setInterval(function(){{fetch('/vivo').then(function(r){{return r.text()}}).then(function(t){{document.getElementById('vivo').innerHTML=t}}).catch(function(){{}})}},10000)</script>
 <p class="sub">Cada temporada es un año con 2 semestres: los puntos empiezan de cero en cada semestre y en cada
