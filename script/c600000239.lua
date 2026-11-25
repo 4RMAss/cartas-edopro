@@ -3,11 +3,11 @@
 --Script: 4RMAss · Anime Server by 4RMAss
 --Basado en el script oficial de Project Ignis (EDOPro) "The Winged Dragon of Ra (Anime)" (c511600400), con licencia AGPL-3.0.
 --Tiene exactamente los efectos del Ra anime del juego (se cargan desde c511600400.lua) y además tres formas:
---  • Forma 1 (600000240, esfera): al invocarlo por tributo. Desde ella se puede activar un efecto para pasar a la forma 2.
+--  • Forma 1 (600000240, esfera): al invocarlo por tributo, o si lo invoca el rival. Solo su dueño puede activar el
+--    efecto para pasar a la forma 2; si la esfera está en el campo rival, al activarlo en su turno la recupera.
 --  • Forma 2 (600000239, la del juego base): la forma principal.
 --  • Forma 3 (600000241, fénix): al resolver "Point-to-Point Transfer" o "Immortal Phoenix".
---  • Si no lo invocó su dueño o no lo controla su dueño, se queda en la forma 1 y no puede usar
---    el cambio de forma, "Point-to-Point Transfer" ni "Immortal Phoenix".
+--  • "Point-to-Point Transfer" e "Immortal Phoenix" solo los puede usar su dueño, con la carta en su campo y fuera de la forma 1.
 --  • Sigue siendo "The Winged Dragon of Ra" para las reglas (alias 10000010) durante todo el duelo.
 --  • Vuelve a la forma 2 al dejar el campo, al terminar el turno (desde la forma 3) y si "De-Fusion" le quita los efectos.
 Duel.LoadCardScript("c511600400.lua")
@@ -20,12 +20,15 @@ local RA_ALIAS=10000010 --"The Winged Dragon of Ra"
 function s.initial_effect(c)
 	--Todos los efectos del Ra anime del juego
 	c511600400.initial_effect(c)
-	--"Point-to-Point Transfer" e "Immortal Phoenix": solo si lo invocó y lo controla su dueño
 	for _,eff in ipairs({c:GetOwnEffects()}) do
 		local d=eff:GetDescription()
+		local con=eff:GetCondition()
 		if d==aux.Stringid(BASE,0) or d==aux.Stringid(BASE,1) then
-			local con=eff:GetCondition()
-			eff:SetCondition(function(e,...) return s.legit(e:GetHandler()) and (not con or con(e,...)) end)
+			--"Point-to-Point Transfer" e "Immortal Phoenix": solo su dueño, en su campo y fuera de la forma esfera
+			eff:SetCondition(function(e,...) return s.canuse(e:GetHandler()) and (not con or con(e,...)) end)
+		elseif eff:GetCode()==EFFECT_CANNOT_CHANGE_CONTROL then
+			--Su control no puede cambiar, salvo cuando su dueño lo recupera con el cambio de forma
+			eff:SetCondition(function(e,...) return not s.moving and (not con or con(e,...)) end)
 		end
 	end
 	--Invocación por tributo: forma esfera
@@ -38,18 +41,29 @@ function s.initial_effect(c)
 	--Invocación especial que no hizo su dueño: forma esfera
 	local e2=e1:Clone()
 	e2:SetCode(EVENT_SPSUMMON_SUCCESS)
-	e2:SetCondition(function(e) return not s.legit(e:GetHandler()) end)
+	e2:SetCondition(function(e) return not s.ownsummon(e:GetHandler()) end)
 	c:RegisterEffect(e2)
-	--Pasar de la forma esfera a la forma principal
+	--Pasar de la forma esfera a la forma principal (solo su dueño; si está en el campo rival, la recupera)
 	local e3=Effect.CreateEffect(c)
 	e3:SetDescription(aux.Stringid(id,4))
 	e3:SetType(EFFECT_TYPE_IGNITION)
 	e3:SetRange(LOCATION_MZONE)
-	e3:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
-	e3:SetCondition(function(e) local c=e:GetHandler() return c:GetOriginalCode()==FORM_SPHERE and s.legit(c) end)
-	e3:SetOperation(function(e)
+	e3:SetProperty(EFFECT_FLAG_BOTH_SIDE+EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
+	e3:SetCondition(function(e,tp) local c=e:GetHandler() return c:GetOriginalCode()==FORM_SPHERE and tp==c:GetOwner() end)
+	e3:SetTarget(function(e,tp,eg,ep,ev,re,r,rp,chk)
 		local c=e:GetHandler()
-		if c:IsRelateToEffect(e) and c:IsFaceup() and c:GetOriginalCode()==FORM_SPHERE then s.revert(c) end
+		if chk==0 then return c:IsControler(tp) or Duel.GetLocationCount(tp,LOCATION_MZONE)>0 end
+	end)
+	e3:SetOperation(function(e,tp)
+		local c=e:GetHandler()
+		if not (c:IsRelateToEffect(e) and c:IsFaceup() and c:GetOriginalCode()==FORM_SPHERE) then return end
+		if not c:IsControler(tp) then
+			s.moving=true
+			Duel.GetControl(c,tp)
+			s.moving=false
+			if not c:IsControler(tp) then return end
+		end
+		s.revert(c)
 	end)
 	c:RegisterEffect(e3)
 	--Forma fénix al resolver "Point-to-Point Transfer" o "Immortal Phoenix"
@@ -94,9 +108,13 @@ end
 s.listed_names={RA_ALIAS,BASE}
 
 --¿Lo invocó su dueño y lo controla su dueño?
-function s.legit(c)
+function s.ownsummon(c)
 	local p=c:GetOwner()
 	return c:IsControler(p) and c:GetSummonPlayer()==p
+end
+--¿Puede usar "Point-to-Point Transfer" e "Immortal Phoenix"?
+function s.canuse(c)
+	return c:IsControler(c:GetOwner()) and c:GetOriginalCode()~=FORM_SPHERE
 end
 function s.phoenixcon(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
