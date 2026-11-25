@@ -3,11 +3,14 @@
 --Script: 4RMAss · Anime Server by 4RMAss
 --Basado en el script oficial de Project Ignis (EDOPro) "The Winged Dragon of Ra (Anime)" (c511600400), con licencia AGPL-3.0.
 --Tiene exactamente los efectos del Ra anime del juego (se cargan desde c511600400.lua) y además tres formas:
---  • Forma 1 (600000240, esfera): al invocarlo por tributo, o si lo invoca el rival. Solo su dueño puede activar el
---    efecto para pasar a la forma 2; si la esfera está en el campo rival, al activarlo en su turno la recupera.
+--  • Solo pueden usar sus efectos los jugadores que tenían originalmente una Bestia Divina en su Deck (su dueño
+--    siempre puede, porque el propio Ra es su Bestia Divina).
+--  • Forma 1 (600000240, esfera): al invocarlo por tributo, o si lo invoca un jugador que no puede usarlo. Para pasar
+--    a la forma 2 la activa quien lo controla (si puede usarlo) o su dueño; si la esfera está en el campo rival, su
+--    dueño la recupera al activarlo en su turno.
 --  • Forma 2 (600000239, la del juego base): la forma principal.
 --  • Forma 3 (600000241, fénix): al resolver "Point-to-Point Transfer" o "Immortal Phoenix".
---  • "Point-to-Point Transfer" e "Immortal Phoenix" solo los puede usar su dueño, con la carta en su campo y fuera de la forma 1.
+--  • "Point-to-Point Transfer" e "Immortal Phoenix" solo los puede usar quien lo controla, si puede usarlo, fuera de la forma 1.
 --  • Sigue siendo "The Winged Dragon of Ra" para las reglas (alias 10000010) durante todo el duelo.
 --  • Vuelve a la forma 2 al dejar el campo, al terminar el turno (desde la forma 3) y si "De-Fusion" le quita los efectos.
 Duel.LoadCardScript("c511600400.lua")
@@ -24,7 +27,7 @@ function s.initial_effect(c)
 		local d=eff:GetDescription()
 		local con=eff:GetCondition()
 		if d==aux.Stringid(BASE,0) or d==aux.Stringid(BASE,1) then
-			--"Point-to-Point Transfer" e "Immortal Phoenix": solo su dueño, en su campo y fuera de la forma esfera
+			--"Point-to-Point Transfer" e "Immortal Phoenix": solo quien puede usarlo, en su campo y fuera de la forma esfera
 			eff:SetCondition(function(e,...) return s.canuse(e:GetHandler()) and (not con or con(e,...)) end)
 		elseif eff:GetCode()==EFFECT_CANNOT_CHANGE_CONTROL then
 			--Su control no puede cambiar, salvo cuando su dueño lo recupera con el cambio de forma
@@ -38,18 +41,21 @@ function s.initial_effect(c)
 	e1:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
 	e1:SetOperation(function(e) s.setform(e:GetHandler(),FORM_SPHERE) end)
 	c:RegisterEffect(e1)
-	--Invocación especial que no hizo su dueño: forma esfera
+	--Invocación especial que no hizo un jugador que puede usarlo (en su propio campo): forma esfera
 	local e2=e1:Clone()
 	e2:SetCode(EVENT_SPSUMMON_SUCCESS)
-	e2:SetCondition(function(e) return not s.ownsummon(e:GetHandler()) end)
+	e2:SetCondition(function(e) return not s.worthysummon(e:GetHandler()) end)
 	c:RegisterEffect(e2)
-	--Pasar de la forma esfera a la forma principal (solo su dueño; si está en el campo rival, la recupera)
+	--Pasar de la forma esfera a la forma principal (quien lo controla si puede usarlo, o su dueño; si está en el campo rival, su dueño la recupera)
 	local e3=Effect.CreateEffect(c)
 	e3:SetDescription(aux.Stringid(id,4))
 	e3:SetType(EFFECT_TYPE_IGNITION)
 	e3:SetRange(LOCATION_MZONE)
 	e3:SetProperty(EFFECT_FLAG_BOTH_SIDE+EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
-	e3:SetCondition(function(e,tp) local c=e:GetHandler() return c:GetOriginalCode()==FORM_SPHERE and tp==c:GetOwner() end)
+	e3:SetCondition(function(e,tp)
+		local c=e:GetHandler()
+		return c:GetOriginalCode()==FORM_SPHERE and s.worthy(tp) and (tp==c:GetOwner() or c:IsControler(tp))
+	end)
 	e3:SetTarget(function(e,tp,eg,ep,ev,re,r,rp,chk)
 		local c=e:GetHandler()
 		if chk==0 then return c:IsControler(tp) or Duel.GetLocationCount(tp,LOCATION_MZONE)>0 end
@@ -115,14 +121,27 @@ function s.initial_effect(c)
 end
 s.listed_names={RA_ALIAS,BASE}
 
---¿Lo invocó su dueño y lo controla su dueño?
-function s.ownsummon(c)
-	local p=c:GetOwner()
-	return c:IsControler(p) and c:GetSummonPlayer()==p
+--¿El jugador tenía originalmente una Bestia Divina en su Deck? (cartas suyas, en cualquier lugar, sin contar Tokens)
+function s.divinefilter(c,p)
+	return c:GetOwner()==p and not c:IsType(TYPE_TOKEN) and (c:GetOriginalRace()&RACE_DIVINE)~=0
+end
+function s.worthy(p)
+	s.divine=s.divine or {}
+	if s.divine[p]==nil then
+		local g=Duel.GetMatchingGroup(s.divinefilter,0,LOCATION_ALL&~LOCATION_OVERLAY,LOCATION_ALL&~LOCATION_OVERLAY,nil,p)
+		g:Merge(Duel.GetOverlayGroup(0,1,1):Filter(s.divinefilter,nil,p))
+		s.divine[p]=#g>0
+	end
+	return s.divine[p]
+end
+--¿Lo invocó en su propio campo un jugador que puede usarlo?
+function s.worthysummon(c)
+	local p=c:GetSummonPlayer()
+	return c:IsControler(p) and s.worthy(p)
 end
 --¿Puede usar "Point-to-Point Transfer" e "Immortal Phoenix"?
 function s.canuse(c)
-	return c:IsControler(c:GetOwner()) and c:GetOriginalCode()~=FORM_SPHERE
+	return s.worthy(c:GetControler()) and c:GetOriginalCode()~=FORM_SPHERE
 end
 function s.phoenixcon(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
