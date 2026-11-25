@@ -1,0 +1,37 @@
+--Performapal Shieldrummer (Anime)
+--Script: 4RMAss · Anime Server by 4RMAss
+local s,id=GetID()
+function s.initial_effect(c)
+	Pendulum.AddProcedure(c)
+	--Pendulum: return 1 card you control to the hand to negate an attack
+	local e1=Effect.CreateEffect(c)
+	e1:SetDescription(aux.Stringid(id,0))
+	e1:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
+	e1:SetCode(EVENT_ATTACK_ANNOUNCE)
+	e1:SetRange(LOCATION_PZONE)
+	e1:SetCondition(function(e,tp) return Duel.GetAttacker():IsControler(1-tp) end)
+	e1:SetCost(function(e,tp,eg,ep,ev,re,r,rp,chk)
+		if chk==0 then return Duel.IsExistingMatchingCard(Card.IsAbleToHandAsCost,tp,LOCATION_ONFIELD,0,1,nil) end
+		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_RTOHAND)
+		Duel.SendtoHand(Duel.SelectMatchingCard(tp,Card.IsAbleToHandAsCost,tp,LOCATION_ONFIELD,0,1,1,nil),nil,REASON_COST)
+	end)
+	e1:SetOperation(function() Duel.NegateAttack() end)
+	c:RegisterEffect(e1)
+	--Monster: return this card to the hand to end the Battle Phase
+	local e2=Effect.CreateEffect(c)
+	e2:SetDescription(aux.Stringid(id,1))
+	e2:SetType(EFFECT_TYPE_QUICK_O)
+	e2:SetCode(EVENT_FREE_CHAIN)
+	e2:SetRange(LOCATION_MZONE)
+	e2:SetHintTiming(0,TIMING_BATTLE_START|TIMING_ATTACK|TIMING_BATTLE_PHASE)
+	e2:SetCondition(function() return Duel.IsBattlePhase() and not Duel.IsPhase(PHASE_DAMAGE) end)
+	e2:SetCost(function(e,tp,eg,ep,ev,re,r,rp,chk)
+		local c=e:GetHandler()
+		if chk==0 then return c:IsAbleToHandAsCost() end
+		Duel.SendtoHand(c,nil,REASON_COST)
+	end)
+	e2:SetOperation(function()
+		Duel.SkipPhase(Duel.GetTurnPlayer(),PHASE_BATTLE,RESET_PHASE|PHASE_BATTLE_STEP,1)
+	end)
+	c:RegisterEffect(e2)
+end

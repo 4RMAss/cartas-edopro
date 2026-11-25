@@ -1,0 +1,50 @@
+--Enter-Mate Rolling Sambaa (Manga)
+--Script: 4RMAss · Anime Server by 4RMAss
+local s,id=GetID()
+function s.initial_effect(c)
+	Pendulum.AddProcedure(c)
+	--Change its battle position to negate an attack
+	local e1=Effect.CreateEffect(c)
+	e1:SetDescription(aux.Stringid(id,0))
+	e1:SetCategory(CATEGORY_POSITION)
+	e1:SetType(EFFECT_TYPE_QUICK_O)
+	e1:SetCode(EVENT_ATTACK_ANNOUNCE)
+	e1:SetRange(LOCATION_MZONE)
+	e1:SetCountLimit(1)
+	e1:SetCondition(function(e,tp) return Duel.GetAttacker():IsControler(1-tp) end)
+	e1:SetTarget(function(e,tp,eg,ep,ev,re,r,rp,chk)
+		if chk==0 then return e:GetHandler():IsCanChangePosition() end
+		Duel.SetOperationInfo(0,CATEGORY_POSITION,e:GetHandler(),1,0,0)
+	end)
+	e1:SetOperation(function(e)
+		local c=e:GetHandler()
+		if c:IsRelateToEffect(e) and c:IsFaceup() and Duel.ChangePosition(c,POS_FACEUP_DEFENSE,POS_FACEUP_DEFENSE,POS_FACEUP_ATTACK,POS_FACEUP_ATTACK)>0 then
+			Duel.NegateAttack()
+		end
+	end)
+	c:RegisterEffect(e1)
+	--Banish 1 Spell/Trap from your GY: battle damage becomes 0
+	local e2=Effect.CreateEffect(c)
+	e2:SetDescription(aux.Stringid(id,1))
+	e2:SetType(EFFECT_TYPE_QUICK_O)
+	e2:SetCode(EVENT_PRE_DAMAGE_CALCULATE)
+	e2:SetRange(LOCATION_MZONE)
+	e2:SetCountLimit(1)
+	e2:SetCondition(function(e,tp) return Duel.GetBattleDamage(tp)>0 and not Duel.IsPlayerAffectedByEffect(tp,EFFECT_AVOID_BATTLE_DAMAGE) end)
+	e2:SetCost(function(e,tp,eg,ep,ev,re,r,rp,chk)
+		local f=function(c) return c:IsSpellTrap() and c:IsAbleToRemoveAsCost() end
+		if chk==0 then return Duel.IsExistingMatchingCard(f,tp,LOCATION_GRAVE,0,1,nil) end
+		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)
+		Duel.Remove(Duel.SelectMatchingCard(tp,f,tp,LOCATION_GRAVE,0,1,1,nil),POS_FACEUP,REASON_COST)
+	end)
+	e2:SetOperation(function(e,tp)
+		local e1=Effect.CreateEffect(e:GetHandler())
+		e1:SetType(EFFECT_TYPE_FIELD)
+		e1:SetCode(EFFECT_AVOID_BATTLE_DAMAGE)
+		e1:SetProperty(EFFECT_FLAG_PLAYER_TARGET)
+		e1:SetTargetRange(1,0)
+		e1:SetReset(RESET_PHASE|PHASE_DAMAGE)
+		Duel.RegisterEffect(e1,tp)
+	end)
+	c:RegisterEffect(e2)
+end

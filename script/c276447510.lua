@@ -1,0 +1,42 @@
+--Rainbow Kuriboh (Manga)
+--Script: 4RMAss · Anime Server by 4RMAss
+local s,id=GetID()
+function s.initial_effect(c)
+	local e1=Effect.CreateEffect(c)
+	e1:SetDescription(aux.Stringid(id,0))
+	e1:SetCategory(CATEGORY_EQUIP)
+	e1:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
+	e1:SetProperty(EFFECT_FLAG_CARD_TARGET)
+	e1:SetCode(EVENT_ATTACK_ANNOUNCE)
+	e1:SetRange(LOCATION_HAND)
+	e1:SetCondition(function(e,tp) return Duel.GetAttacker():IsControler(1-tp) end)
+	e1:SetTarget(function(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
+		local a=Duel.GetAttacker()
+		if chkc then return chkc==a end
+		if chk==0 then return Duel.GetLocationCount(tp,LOCATION_SZONE)>0 and a:IsOnField() and a:IsCanBeEffectTarget(e) end
+		Duel.SetTargetCard(a)
+		Duel.SetOperationInfo(0,CATEGORY_EQUIP,e:GetHandler(),1,0,0)
+	end)
+	e1:SetOperation(s.eqop)
+	c:RegisterEffect(e1)
+end
+function s.eqop(e,tp,eg,ep,ev,re,r,rp)
+	local c=e:GetHandler()
+	local tc=Duel.GetFirstTarget()
+	if not (c:IsRelateToEffect(e) and tc and tc:IsRelateToEffect(e) and tc:IsFaceup()) or Duel.GetLocationCount(tp,LOCATION_SZONE)<=0 then return end
+	if not Duel.Equip(tp,c,tc) then return end
+	local e1=Effect.CreateEffect(c)
+	e1:SetType(EFFECT_TYPE_SINGLE)
+	e1:SetCode(EFFECT_EQUIP_LIMIT)
+	e1:SetProperty(EFFECT_FLAG_CANNOT_DISABLE)
+	e1:SetValue(function(e,ec) return ec==e:GetLabelObject() end)
+	e1:SetLabelObject(tc)
+	e1:SetReset(RESET_EVENT|RESETS_STANDARD)
+	c:RegisterEffect(e1)
+	local e2=Effect.CreateEffect(c)
+	e2:SetType(EFFECT_TYPE_EQUIP)
+	e2:SetCode(EFFECT_CANNOT_ATTACK)
+	e2:SetReset(RESET_EVENT|RESETS_STANDARD)
+	c:RegisterEffect(e2)
+	Duel.NegateAttack()
+end

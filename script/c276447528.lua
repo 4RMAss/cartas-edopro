@@ -1,0 +1,17 @@
+--Trick Explanation (Manga)
+--Script: 4RMAss · Anime Server by 4RMAss
+local s,id=GetID()
+function s.initial_effect(c)
+	local e0=Effect.CreateEffect(c)
+	e0:SetType(EFFECT_TYPE_ACTIVATE)
+	e0:SetCode(EVENT_FREE_CHAIN)
+	c:RegisterEffect(e0)
+	local e1=Effect.CreateEffect(c)
+	e1:SetType(EFFECT_TYPE_FIELD)
+	e1:SetCode(EFFECT_CANNOT_RELEASE)
+	e1:SetRange(LOCATION_SZONE)
+	e1:SetProperty(EFFECT_FLAG_PLAYER_TARGET)
+	e1:SetTargetRange(1,1)
+	e1:SetTarget(function(e,c,tp,r,re) return re and re:IsMonsterEffect() and re:GetHandler()~=c end)
+	c:RegisterEffect(e1)
+end
