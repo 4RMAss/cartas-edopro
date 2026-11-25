@@ -104,6 +104,14 @@ function s.initial_effect(c)
 	end)
 	e7:SetOperation(function(e) s.revert(e:GetHandler()) end)
 	c:RegisterEffect(e7)
+	--En la forma esfera no puede atacar
+	local e8=Effect.CreateEffect(c)
+	e8:SetType(EFFECT_TYPE_SINGLE)
+	e8:SetProperty(EFFECT_FLAG_SINGLE_RANGE+EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
+	e8:SetCode(EFFECT_CANNOT_ATTACK)
+	e8:SetRange(LOCATION_MZONE)
+	e8:SetCondition(function(e) return e:GetHandler():GetOriginalCode()==FORM_SPHERE end)
+	c:RegisterEffect(e8)
 end
 s.listed_names={RA_ALIAS,BASE}
 
