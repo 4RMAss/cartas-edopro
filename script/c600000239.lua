@@ -6,8 +6,8 @@
 --  • Solo pueden usar sus efectos los jugadores que tenían originalmente una Bestia Divina en su Deck (su dueño
 --    siempre puede, porque el propio Ra es su Bestia Divina).
 --  • Forma 1 (600000240, esfera): al invocarlo por tributo, o si lo invoca un jugador que no puede usarlo. Para pasar
---    a la forma 2 la activa quien lo controla (si puede usarlo) o su dueño; si la esfera está en el campo rival, su
---    dueño la recupera al activarlo en su turno.
+--    a la forma 2 la activa quien lo controla, si puede usarlo. Si la esfera está en el campo de un rival que no puede
+--    usarlo, su dueño la recupera al activarlo en su turno.
 --  • Forma 2 (600000239, la del juego base): la forma principal.
 --  • Forma 3 (600000241, fénix): al resolver "Point-to-Point Transfer" o "Immortal Phoenix".
 --  • "Point-to-Point Transfer" e "Immortal Phoenix" solo los puede usar quien lo controla, si puede usarlo, fuera de la forma 1.
@@ -46,7 +46,7 @@ function s.initial_effect(c)
 	e2:SetCode(EVENT_SPSUMMON_SUCCESS)
 	e2:SetCondition(function(e) return not s.worthysummon(e:GetHandler()) end)
 	c:RegisterEffect(e2)
-	--Pasar de la forma esfera a la forma principal (quien lo controla si puede usarlo, o su dueño; si está en el campo rival, su dueño la recupera)
+	--Pasar de la forma esfera a la forma principal (quien lo controla, si puede usarlo; si lo controla un rival que no puede usarlo, su dueño la recupera)
 	local e3=Effect.CreateEffect(c)
 	e3:SetDescription(aux.Stringid(id,4))
 	e3:SetType(EFFECT_TYPE_IGNITION)
@@ -54,7 +54,8 @@ function s.initial_effect(c)
 	e3:SetProperty(EFFECT_FLAG_BOTH_SIDE+EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
 	e3:SetCondition(function(e,tp)
 		local c=e:GetHandler()
-		return c:GetOriginalCode()==FORM_SPHERE and s.worthy(tp) and (tp==c:GetOwner() or c:IsControler(tp))
+		return c:GetOriginalCode()==FORM_SPHERE and s.worthy(tp)
+			and (c:IsControler(tp) or (tp==c:GetOwner() and not s.worthy(c:GetControler())))
 	end)
 	e3:SetTarget(function(e,tp,eg,ep,ev,re,r,rp,chk)
 		local c=e:GetHandler()
