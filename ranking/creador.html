@@ -368,7 +368,7 @@ footer{margin-top:28px;color:var(--muted);font-size:.76rem;border-top:1px solid 
           <input id="tplFiles" type="file" accept="image/*,.ttf,.otf,.woff,.woff2" multiple hidden>
           <label class="btn" for="tplDir" style="text-transform:none;letter-spacing:0;color:var(--paper);font-size:.88rem">Subir carpeta</label>
           <input id="tplDir" type="file" webkitdirectory multiple hidden>
-          <button id="tplGit" type="button">Cargar desde mi repositorio (plantillas/)</button>
+          <button id="tplGit" type="button">Recargar desde mi repositorio (plantillas/)</button>
           <button id="tplClear" type="button">Quitar todas</button>
         </div>
         <label class="chip" style="align-self:flex-start"><input type="checkbox" id="tplBleed"><span>La plantilla ocupa toda la carta (sin el borde exterior azulado)</span></label>
@@ -454,7 +454,7 @@ const MANGA_ART = { x: 118, y: 268, w: 764, h: 1012 };
 const MANGA_ART_D = { x: 118, y: 268, w: 764, h: 812 };
 const MANGA_ART_N = { x: 118, y: 268, w: 764, h: 900 };
 const isMangaNormal = () => state.layout === 'manga' && state.frame === 'normal';
-const artBox = () => state.mode === 'anime' ? (state.pend && !isSpellTrap(state.frame) ? ANIME_ART_P : ANIME_ART)
+const artBox = () => state.mode === 'anime' ? (tplLayoutFor(state.frame, state.pend && !isSpellTrap(state.frame)) === 'ocg1' ? OCG1_ART : state.pend && !isSpellTrap(state.frame) ? ANIME_ART_P : ANIME_ART)
   : isSpellTrap(state.frame) ? SPELL_ART
   : isMangaNormal() ? MANGA_ART_N
   : state.layout === 'manga' ? (state.desc.trim() ? MANGA_ART_D : MANGA_ART)
@@ -546,7 +546,7 @@ const state = {
   name: 'Centinela del Monte Lunar', frame: 'normal', level: 7, attr: 'LUZ', atk: '2300', def: '1800',
   zoom: 1, ox: 0, oy: 0, filter: 'gray', dot: 9, contrast: 1.15, cardBW: true,
   subtype: 'normal', desc: '', cardLang: 'en', layout: 'manga', showAttr: false,
-  mode: 'manga', race: '', effTok: true, tuner: false, pend: false, scale: '4', pendDesc: '', linkMask: 0, setCode: '', showPass: true, edition: '1st', footRight: '', tplBleed: true, tplAx: 0, tplAy: 0, tplAs: 0,
+  mode: 'manga', race: '', effTok: true, tuner: false, pend: false, scale: '4', pendDesc: '', linkMask: 0, setCode: '', showPass: true, edition: '1st', footRight: '', tplLay: {}, tplBleed: true, tplAx: 0, tplAy: 0, tplAs: 0,
   srcText: '', maxLen: 170, tone: 'manga', cardId: '', idAuto: true, fmt: 'png',
 };
 const SUBTYPES = {
@@ -731,6 +731,7 @@ const SPH = {
 const F_NAME0 = '"Spectral SC", "Tinos", Georgia, serif', F_BODY0 = '"Crimson Pro", "Tinos", Georgia, serif', F_SMALL0 = '"Spectral", "Tinos", Georgia, serif', F_LINK0 = '"Krona One", "Oswald", sans-serif', F_NUM0 = '"Spectral", "Tinos", Georgia, serif';
 let F_NAME = F_NAME0, F_TYPE = F_NAME0, F_BODY = F_BODY0, F_SMALL = F_SMALL0, F_LINK = F_LINK0, F_NUM = F_NUM0;
 let K_NAME = .76, K_TYPE = .84, K_BODY = .92; // horizontal condensing tuned for the substitute fonts
+let F_ITALIC = F_BODY0; const NAME_K_REAL = .96;
 function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
 let NOISE = null;
 function noisePattern(ctx) {
@@ -840,6 +841,8 @@ function levelStar(ctx, cx, cy, r, rank) {
   ctx.fillStyle = sg; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(160,80,0,.6)'; ctx.stroke();
 }
 function spellIcon(ctx, kind, cx, cy, s) {
+  const ti = typeof TPL !== 'undefined' && TPL.img['i_' + kind];
+  if (ti) { ctx.drawImage(ti, cx - s * .6, cy - s * .6, s * 1.2, s * 1.2); return; }
   ctx.save(); ctx.translate(cx, cy);
   const g = ctx.createRadialGradient(-s * .15, -s * .15, 0, 0, 0, s * .55); g.addColorStop(0, '#ff6a6a'); g.addColorStop(1, '#7a0a1a');
   ctx.beginPath(); ctx.arc(0, 0, s * .52, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#2a0408'; ctx.stroke();
@@ -912,12 +915,114 @@ function textBox(ctx, x, y, w, h, fill, grey) {
   };
   stud(x - 2, y - 2); stud(x + w - 20, y - 2); stud(x - 2, y + h - 20); stud(x + w - 20, y + h - 20);
 }
+/* ---------- old Japanese layout (攻/守 box) for user templates — measured on a 694×1013 template ---------- */
+const OCG1_ART = { x: 146, y: 338, w: 707, h: 780 };
+function tplLayoutFor(fr, pend) {
+  if (state.mode !== 'anime' || typeof TPL === 'undefined') return 'tcg';
+  const slot = pend ? (fr === 'normal' ? 'f_pend_normal' : 'f_pend_effect') : 'f_' + fr;
+  return TPL.img[slot] && (state.tplLay || {})[slot] === 'ocg1' ? 'ocg1' : 'tcg';
+}
+const HOLE = new WeakMap();
+function tplHasHole(T) { // is the art window transparent?
+  if (HOLE.has(T)) return HOLE.get(T);
+  let v = false;
+  try { const c = document.createElement('canvas'); c.width = c.height = 1; const g = c.getContext('2d'); g.drawImage(T, (T.naturalWidth || T.width) * .5, (T.naturalHeight || T.height) * .5, 1, 1, 0, 0, 1, 1); v = g.getImageData(0, 0, 1, 1).data[3] < 128; } catch (e) {}
+  HOLE.set(T, v); return v;
+}
+// Normalises any old-style template: finds its art window (white, checkerboard or transparent), scales it so the
+// window sits at the standard spot (694×1013 space), punches the window out, and checks whether 攻/守 are printed.
+const NORM = new WeakMap();
+function ocgNormalize(T) {
+  if (NORM.has(T)) return NORM.get(T);
+  const w = T.naturalWidth || T.width, h = T.naturalHeight || T.height, fall = { img: T, hole: false, labels: true };
+  let d;
+  try { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); g.drawImage(T, 0, 0); d = g.getImageData(0, 0, w, h).data; }
+  catch (e) { NORM.set(T, fall); return fall; }
+  const win = (x, y) => { const i = (y * w + x) * 4; if (d[i + 3] < 128) return true; const mn = Math.min(d[i], d[i + 1], d[i + 2]), mx = Math.max(d[i], d[i + 1], d[i + 2]); return mn > 182 && mx - mn < 24; };
+  const med = a => a.sort((p, q) => p - q)[a.length >> 1];
+  const cx = Math.round(w * .5), cy = Math.round(h * .5);
+  if (!win(cx, cy)) { NORM.set(T, fall); return fall; }
+  const Ls = [], Rs = [], Ts = [], Bs = [];
+  for (const f of [-.12, -.06, 0, .06, .12]) {
+    const y = Math.round(cy + f * h), x = Math.round(cx + f * w);
+    let l = cx; while (l > 0 && win(l - 1, y)) l--; Ls.push(l);
+    let r = cx; while (r < w - 1 && win(r + 1, y)) r++; Rs.push(r + 1);
+    let t = cy; while (t > 0 && win(x, t - 1)) t--; Ts.push(t);
+    let b = cy; while (b < h - 1 && win(x, b + 1)) b++; Bs.push(b + 1);
+  }
+  const L = med(Ls), R = med(Rs), Tp = med(Ts), B = med(Bs);
+  const sx = (R - L) / 492, sy = (B - Tp) / 543, ox = L - 101 * sx, oy = Tp - 235 * sy;
+  const out = document.createElement('canvas'); out.width = 694; out.height = 1013; const o = out.getContext('2d');
+  o.drawImage(T, ox, oy, 694 * sx, 1013 * sy, 0, 0, 694, 1013);
+  o.clearRect(101, 235, 492, 543);
+  const lab = o.getImageData(478, 848, 40, 40).data; let dark = 0;
+  for (let i = 0; i < lab.length; i += 4) if (lab[i + 3] > 128 && lab[i] + lab[i + 1] + lab[i + 2] < 240) dark++;
+  const res = { img: out, hole: true, labels: dark > 25 };
+  NORM.set(T, res); return res;
+}
+function drawOcg1(ctx, S, opts, T0, fr) {
+  const st = isSpellTrap(fr), N = ocgNormalize(T0), T = N.img, hole = N.hole;
+  // art (under the frame when the template's window is transparent)
+  const B0 = OCG1_ART, a = state.tplAs || 0;
+  const B = { x: B0.x + (state.tplAx || 0) - a / 2, y: B0.y + (state.tplAy || 0) - a / 2, w: B0.w + a, h: B0.h + a * B0.h / B0.w };
+  const img = opts.noArt ? SAMPLE_ART : (art_img() || SAMPLE_ART);
+  const drawArt = () => ctx.drawImage(renderArt(S, img, B), B.x, B.y, B.w, B.h);
+  if (hole) { drawArt(); ctx.drawImage(T, 0, 0, W, H); } else { ctx.drawImage(T, 0, 0, W, H); drawArt(); }
+  // name
+  const nmf = TPL.font.name ? `400 104px ${F_NAME}` : `700 78px ${F_NAME}`;
+  if (st) { ctx.fillStyle = 'rgba(0,0,0,.55)'; txt(ctx, state.name || ' ', 103, 163, nmf, K_NAME, 'left', 690); }
+  ctx.fillStyle = st ? '#fbfbfb' : '#111';
+  txt(ctx, state.name || ' ', 101, 161, nmf, K_NAME, 'left', 690);
+  // attribute / SPELL / TRAP
+  const aKey = st ? fr : (state.attr in SPH ? state.attr : 'LUZ'), aImg = TPL.img['a_' + aKey];
+  if (aImg) ctx.drawImage(aImg, 857 - 46, 137 - 46, 92, 92);
+  else if (st) sphereIcon(ctx, 857, 137, 43, fr, fr === 'spell' ? '魔' : '罠', fr === 'spell' ? 'SPELL' : 'TRAP');
+  else { const A = ATTRS[aKey]; sphereIcon(ctx, 857, 137, 43, aKey, A.k, A.api); }
+  if (st) {
+    // [Spell Card ⚡] under the name, then the text in the wide box
+    const es = state.cardLang === 'es', ja = state.cardLang === 'ja';
+    const label = ja ? (fr === 'spell' ? '魔法カード' : '罠カード') : es ? (fr === 'spell' ? 'Carta Mágica' : 'Carta de Trampa') : (fr === 'spell' ? 'Spell Card' : 'Trap Card');
+    const lf = `${TPL.font.small ? '400 50px' : '800 50px'} ${F_TYPE}`, kl = TPL.font.small ? 1 : 1.1;
+    ctx.fillStyle = '#111';
+    let x = 872; x -= txt(ctx, ']', x, 280, lf, kl, 'right') + 8;
+    if (state.subtype && state.subtype !== 'normal') { spellIcon(ctx, state.subtype, x - 24, 263, 44); x -= 54; }
+    txt(ctx, '[' + label, x, 280, lf, kl, 'right', 640);
+    const text = state.desc.trim();
+    paragraph(ctx, text || (es ? 'Aquí va el texto de la carta.' : 'Card text goes here.'), { x: 118, y: 1222, w: 770, h: 134 },
+      { size: TPL.font.body ? 27 : 28, min: 10, k: K_BODY, weight: 600, color: text ? '#111' : 'rgba(20,20,20,.4)' });
+    if (state.showPass && state.cardId) { ctx.fillStyle = '#111'; txt(ctx, state.cardId, 60, 1406, `${TPL.font.serial ? '400 26px' : '500 28px'} ${F_SMALL}`, .95); }
+    return;
+  }
+  // stars
+  if (fr !== 'link') {
+    const n = Math.max(1, Math.min(13, state.level | 0)), xyz = fr === 'xyz', sImg = TPL.img[xyz ? 's_rank' : 's_level'];
+    for (let i = 0; i < n; i++) { const cx = xyz ? 172 + i * 58 : 850 - i * 58; if (sImg) ctx.drawImage(sImg, cx - 27, 259 - 27, 54, 54); else levelStar(ctx, cx, 259, 25, xyz); }
+  }
+  // effect text in the small box
+  const text = state.desc.trim();
+  if (text) paragraph(ctx, text, { x: 118, y: 1222, w: 494, h: 134 }, { size: TPL.font.body ? 27 : 28, min: 10, k: K_BODY, italic: fr === 'normal' && !TPL.font.italic, fam: fr === 'normal' ? F_ITALIC : F_BODY, weight: 600, color: '#111' });
+  // ATK / DEF next to 攻 / 守 (labels drawn when the template doesn't print them)
+  ctx.fillStyle = '#111';
+  if (!N.labels) {
+    ctx.textAlign = 'center';
+    ctx.font = '900 48px "Noto Serif JP", serif'; ctx.fillText('攻', 716, 1268); ctx.fillText('守', 716, 1343);
+    ctx.font = '900 17px "Noto Serif JP", serif'; ctx.fillText('こう', 716, 1213); ctx.fillText('しゅ', 716, 1288);
+    ctx.textAlign = 'left';
+  }
+  const nf = TPL.font.small ? `400 46px ${F_NUM}` : `700 46px ${F_NUM}`;
+  txt(ctx, String(state.atk || '0'), 906, 1274, nf, .95, 'right', 150);
+  txt(ctx, fr === 'link' ? 'LINK-' + linkCount() : String(state.def || '0'), 906, 1349, nf, .95, 'right', 150);
+  // passcode (bottom-left, the template's own copyright stays on the right)
+  if (state.showPass && state.cardId) { ctx.fillStyle = '#111'; txt(ctx, state.cardId, 60, 1406, `${TPL.font.serial ? '400 26px' : '500 28px'} ${F_SMALL}`, .95); }
+}
+
 function drawAnimeCard(ctx, S, opts) {
   const fr = AN[state.frame] ? state.frame : 'normal', P = AN[fr], st = isSpellTrap(fr);
   const pend = state.pend && !st, link = fr === 'link', xyz = fr === 'xyz';
   const lightText = xyz ? '#f2f2f2' : '#111';
   const BX = 35, BY = 35, BW = 930, BH = 1386; // card body inside the cloudy border
   const T = tplFrame(fr, pend);
+  if (T && tplLayoutFor(fr, pend) === 'ocg1') { drawOcg1(ctx, S, opts, T, fr); return; }
   if (T) {
     if (state.tplBleed) { ctx.drawImage(T, 0, 0, W, H); ctx.transform(W / BW, 0, 0, H / BH, -BX * W / BW, -BY * H / BH); }
     else {
@@ -962,7 +1067,7 @@ function drawAnimeCard(ctx, S, opts) {
   ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.strokeRect(nb.x, nb.y, nb.w, nb.h);
   }
   const nameW = st || xyz || link;
-  const nameFont = `700 86px ${F_NAME}`;
+  const nameFont = TPL.font.name ? `400 117px ${F_NAME}` : `700 86px ${F_NAME}`;
   if (nameW) { ctx.fillStyle = 'rgba(0,0,0,.6)'; txt(ctx, state.name || ' ', 82, 150, nameFont, K_NAME, 'left', 752); }
   ctx.fillStyle = nameW ? '#fbfbfb' : '#111'; txt(ctx, state.name || ' ', 80, 148, nameFont, K_NAME, 'left', 752);
 
@@ -978,9 +1083,9 @@ function drawAnimeCard(ctx, S, opts) {
     const label = ja ? (fr === 'spell' ? '魔法カード' : '罠カード') : es ? (fr === 'spell' ? 'Carta Mágica' : 'Carta de Trampa') : (fr === 'spell' ? 'Spell Card' : 'Trap Card');
     const lf = `800 50px ${F_NAME}`; ctx.fillStyle = '#111';
     const kl = TPL.font.small ? 1 : 1.15;
-    let x = 893; x -= txt(ctx, ']', x, 229, `800 54px ${F_TYPE}`, kl, 'right') + 8;
+    let x = 893; x -= txt(ctx, ']', x, 229, `${TPL.font.small ? '400 53.6px' : '800 54px'} ${F_TYPE}`, kl, 'right') + 8;
     if (state.subtype && state.subtype !== 'normal') { spellIcon(ctx, state.subtype, x - 24, 212, 46); x -= 56; }
-    txt(ctx, '[' + label, x, 229, `800 54px ${F_TYPE}`, kl, 'right', 640);
+    txt(ctx, '[' + label, x, 229, `${TPL.font.small ? '400 53.6px' : '800 54px'} ${F_TYPE}`, kl, 'right', 640);
   } else if (!link) {
     const n = Math.max(1, Math.min(13, state.level | 0));
     const sImg = TPL.img[xyz ? 's_rank' : 's_level'];
@@ -1008,11 +1113,11 @@ function drawAnimeCard(ctx, S, opts) {
     if (!T) { gem(96, 956, '#8ad0ff', '#1a4fb8'); gem(904, 956, '#ff9a9a', '#b8121a'); }
     ctx.fillStyle = '#111'; const sc = String(state.scale ?? '');
     txt(ctx, sc, 96, 1048, `600 62px ${F_SMALL}`, 1, 'center'); txt(ctx, sc, 904, 1048, `600 62px ${F_SMALL}`, 1, 'center');
-    paragraph(ctx, state.pendDesc || '', { x: 152, y: 914, w: 696, h: 163 }, { size: 27.5, min: 11, k: K_BODY, weight: 600, color: '#111' });
+    paragraph(ctx, state.pendDesc || '', { x: 152, y: 914, w: 696, h: 163 }, { size: TPL.font.body ? 25 : 27.5, min: 11, k: K_BODY, weight: 600, color: '#111' });
   }
 
   // set code (pendulum: inside the text box, bottom-left)
-  if (state.setCode && !pend) { ctx.fillStyle = lightText; txt(ctx, state.setCode, 891, 1069, `500 30px ${F_SMALL}`, .91, 'right'); }
+  if (state.setCode && !pend) { ctx.fillStyle = lightText; txt(ctx, state.setCode, 891, 1069, `${(TPL.font.serial ? '400 28.6px' : '500 30px')} ${F_SMALL}`, TPL.font.serial ? .94 : .91, 'right'); }
 
   // text box
   const tb = pend ? { x: 55, y: 1088, w: 892, h: 292 } : { x: 55, y: 1076, w: 892, h: 304 };
@@ -1020,30 +1125,30 @@ function drawAnimeCard(ctx, S, opts) {
   const text = state.desc.trim();
   if (st) {
     paragraph(ctx, text || (state.cardLang === 'es' ? 'Aquí va el texto de la carta.' : 'Card text goes here.'), { x: 80, y: 1090, w: 840, h: 270 },
-      { size: 29.8, min: 12, k: K_BODY, weight: 600, color: text ? '#111' : 'rgba(20,20,20,.4)' });
+      { size: TPL.font.body ? 27.4 : 29.8, min: 12, k: K_BODY, weight: 600, color: text ? '#111' : 'rgba(20,20,20,.4)' });
   } else {
     const ty = pend ? 1138 : 1129.5;
-    ctx.fillStyle = '#111'; txt(ctx, typeTokens(), 82, ty + 1, `800 50px ${F_TYPE}`, K_TYPE, 'left', 838);
+    ctx.fillStyle = '#111'; txt(ctx, typeTokens(), 82, ty + 1, `${TPL.font.small ? '400 41.6px' : '800 50px'} ${F_TYPE}`, K_TYPE, 'left', 838);
     const sepY = pend ? 1322 : 1320;
-    paragraph(ctx, text, { x: 80, y: ty + 5, w: 840, h: sepY - ty - 12 }, { size: fr === 'normal' && !pend ? 33 : 29.8, min: 11, k: K_BODY, italic: fr === 'normal' && !pend, weight: fr === 'normal' ? 500 : 600, color: '#111' });
+    paragraph(ctx, text, { x: 80, y: ty + 5, w: 840, h: sepY - ty - 12 }, { size: fr === 'normal' && !pend ? (TPL.font.italic ? 30 : 33) : (TPL.font.body ? 27.4 : 29.8), min: 11, k: fr === 'normal' && !pend && TPL.font.italic ? 1 : K_BODY, italic: fr === 'normal' && !pend, fam: fr === 'normal' && !pend ? F_ITALIC : F_BODY, weight: fr === 'normal' ? 500 : 600, color: '#111' });
     ctx.fillStyle = '#111'; ctx.fillRect(80, sepY, 840, 3);
-    const by = pend ? 1356 : 1359, af = `800 41.4px ${F_TYPE}`, nf = `700 40px ${F_NUM}`;
+    const by = pend ? 1356 : 1359, af = `${TPL.font.small ? '400 39px' : '800 41.4px'} ${F_TYPE}`, nf = `${TPL.font.small ? '400 39px' : '700 40px'} ${F_NUM}`, ak = TPL.font.small ? .87 : 1, nk = TPL.font.small ? .87 : .95;
     // fixed slots like printed cards: label left, value right-aligned (lining figures)
-    ctx.font = nf; const digW = ctx.measureText('0000').width * .95;
-    const slot = (label, val, xr) => { ctx.font = af; const lw = ctx.measureText(label).width; txt(ctx, label, xr - digW - lw - 2, by, af, 1); txt(ctx, String(val || '0'), xr, by, nf, .95, 'right'); };
+    ctx.font = nf; const digW = ctx.measureText('0000').width * nk;
+    const slot = (label, val, xr) => { ctx.font = af; const lw = ctx.measureText(label).width * ak; txt(ctx, label, xr - digW - lw - 2, by, af, ak); txt(ctx, String(val || '0'), xr, by, nf, nk, 'right'); };
     slot('ATK/', state.atk, 714);
     if (link) { ctx.fillStyle = '#111'; const lf2 = `400 33px ${F_LINK}`; ctx.font = lf2; const lk = 173 / ctx.measureText('LINK-4').width; txt(ctx, `LINK-${linkCount()}`, 920, by, lf2, lk, 'right'); }
     else slot('DEF/', state.def, 920);
-    if (pend && state.setCode) txt(ctx, state.setCode, 84, by, `500 30px ${F_SMALL}`, .91, 'left');
+    if (pend && state.setCode) txt(ctx, state.setCode, 84, by, `${(TPL.font.serial ? '400 28.6px' : '500 30px')} ${F_SMALL}`, TPL.font.serial ? .94 : .91, 'left');
   }
 
   // bottom line: passcode, edition, right-hand note
   ctx.fillStyle = lightText;
   let bx = 45;
-  if (state.showPass && state.cardId) bx += txt(ctx, state.cardId, bx, 1413, `500 33px ${F_SMALL}`, .95) + 22;
-  if (state.edition === '1st') { bx += txt(ctx, '1', bx, 1413, `700 33px ${F_SMALL}`, .95); bx += txt(ctx, 'st', bx, 1400, `700 18px ${F_SMALL}`, .95) + 6; txt(ctx, 'Edition', bx, 1413, `700 33px ${F_SMALL}`, .95); }
-  else if (state.edition === 'limited') txt(ctx, 'LIMITED EDITION', bx, 1413, `600 30px ${F_SMALL}`, .9);
-  if (state.footRight) txt(ctx, state.footRight, 900, 1413, `500 22px ${F_SMALL}`, .95, 'right', 520);
+  if (state.showPass && state.cardId) bx += txt(ctx, state.cardId, bx, 1413, `${TPL.font.serial ? '400 29px' : '500 33px'} ${F_SMALL}`, TPL.font.serial ? .93 : .95) + 22;
+  if (state.edition === '1st') { const ef = TPL.font.serial ? '400 29px' : '700 33px'; bx += txt(ctx, '1', bx, 1413, `${ef} ${F_SMALL}`, .95); bx += txt(ctx, 'st', bx, 1400, `${TPL.font.serial ? '400 16px' : '700 18px'} ${F_SMALL}`, .95) + 6; txt(ctx, 'Edition', bx, 1413, `${ef} ${F_SMALL}`, .95); }
+  else if (state.edition === 'limited') txt(ctx, 'LIMITED EDITION', bx, 1413, `${TPL.font.serial ? '400 27px' : '600 30px'} ${F_SMALL}`, .9);
+  if (state.footRight) txt(ctx, state.footRight, 900, 1413, `${TPL.font.serial ? '400 20px' : '500 22px'} ${F_SMALL}`, .95, 'right', 520);
 }
 
 /* ---------- manga spell / trap: small-caps title, framed art, plain text ---------- */
@@ -2441,7 +2546,9 @@ const TPL_SLOTS = [
   ['f_xyz', 'Marco Xyz'], ['f_link', 'Marco Link'], ['f_spell', 'Marco Mágica'], ['f_trap', 'Marco Trampa'], ['f_pend_normal', 'Marco Péndulo normal'], ['f_pend_effect', 'Marco Péndulo efecto'],
   ['a_LUZ', 'Icono LIGHT'], ['a_OSCURIDAD', 'Icono DARK'], ['a_TIERRA', 'Icono EARTH'], ['a_AGUA', 'Icono WATER'], ['a_FUEGO', 'Icono FIRE'], ['a_VIENTO', 'Icono WIND'], ['a_DIVINO', 'Icono DIVINE'],
   ['a_spell', 'Icono SPELL'], ['a_trap', 'Icono TRAP'], ['s_level', 'Estrella de nivel'], ['s_rank', 'Estrella de rango'],
-  ['font:name', 'Fuente del nombre'], ['font:body', 'Fuente del texto'], ['font:small', 'Fuente de tipo y ATK/DEF'], ['font:link', 'Fuente de LINK'],
+  ['i_quickplay', 'Subtipo Quick-Play'], ['i_continuous', 'Subtipo Continuous'], ['i_equip', 'Subtipo Equip'], ['i_field', 'Subtipo Field'], ['i_ritual', 'Subtipo Ritual'], ['i_counter', 'Subtipo Counter'],
+  ['font:name', 'Nombre (Matrix Regular Small Caps)'], ['font:body', 'Texto del efecto (Matrix Book)'], ['font:small', 'Tipo y ATK/DEF (Stone Serif Small Caps Bold)'],
+  ['font:italic', 'Texto de Normales (Stone Serif Italic)'], ['font:serial', 'ID, set y edición (Stone Serif Semibold)'], ['font:link', 'LINK (Eurostile)'],
 ];
 const tplNote = (t, warn) => { $('tplNote').textContent = t; $('tplNote').className = 'note' + (warn ? ' warn' : ''); };
 function idb() {
@@ -2465,15 +2572,16 @@ function applyFonts() {
   F_NAME = (f.name ? `"${f.name}", ` : '') + F_NAME0;
   F_TYPE = (f.small ? `"${f.small}", ` : '') + F_NAME0;
   F_BODY = (f.body ? `"${f.body}", ` : '') + F_BODY0;
-  F_SMALL = (f.small ? `"${f.small}", ` : '') + F_SMALL0;
+  F_SMALL = (f.serial ? `"${f.serial}", ` : '') + F_SMALL0;
   F_NUM = (f.small ? `"${f.small}", ` : '') + F_NUM0;
   F_LINK = (f.link ? `"${f.link}", ` : '') + F_LINK0;
-  K_NAME = f.name ? .92 : .76; K_TYPE = f.small ? 1 : .84; K_BODY = f.body ? 1 : .92;
+  F_ITALIC = f.italic ? `"${f.italic}", ` + F_BODY0 : F_BODY;
+  K_NAME = f.name ? NAME_K_REAL : .76; K_TYPE = f.small ? .96 : .84; K_BODY = f.body ? 1 : .92;
 }
 async function setSlot(slot, blob, name, save = true) {
   if (slot.startsWith('font:')) {
     const key = slot.slice(5), fam = 'MCM ' + key + ' ' + Date.now();
-    const ff = new FontFace(fam, await blob.arrayBuffer()); await ff.load(); document.fonts.add(ff);
+    const ff = new FontFace(fam, await blob.arrayBuffer(), { weight: '1 1000', style: key === 'italic' ? 'italic' : 'normal' }); await ff.load(); document.fonts.add(ff);
     TPL.font[key] = fam; applyFonts();
   } else {
     TPL.img[slot] = await tryLoad(URL.createObjectURL(blob), false);
@@ -2489,10 +2597,27 @@ async function clearSlot(slot) {
 function guessSlot(fname, w) {
   const n = norm(fname).replace(/\.[a-z0-9]+$/, ''), has = (...k) => k.some(x => n.includes(x));
   if (/\.(ttf|otf|woff2?)$/i.test(fname)) {
-    if (has('link', 'euro')) return 'font:link';
-    if (has('stone', 'type', 'atk', 'small', 'tipo')) return 'font:small';
+    if (has('euro', 'link')) return 'font:link';
+    if (has('matrix')) {
+      if (has('book')) return 'font:body';
+      if (has('caps')) return has('caps 2', 'caps2') && TPL.font.name ? null : 'font:name';
+      return 'font:name';
+    }
+    if (has('stone')) {
+      if (has('italic')) return 'font:italic';
+      if (has('caps')) return 'font:small';
+      return 'font:serial';
+    }
+    if (has('italic', 'cursiva')) return 'font:italic';
+    if (has('serial', 'passcode')) return 'font:serial';
     if (has('book', 'body', 'text', 'effect', 'efecto')) return 'font:body';
-    if (has('matrix', 'name', 'nombre', 'caps')) return 'font:name';
+    if (has('type', 'atk', 'tipo')) return 'font:small';
+    if (has('name', 'nombre', 'caps')) return 'font:name';
+    return null;
+  }
+  if (has('subtipo', 'subtype', 'sub-')) {
+    if (has('quick', 'rapid')) return 'i_quickplay'; if (has('contin')) return 'i_continuous'; if (has('equip')) return 'i_equip';
+    if (has('field', 'campo')) return 'i_field'; if (has('ritual')) return 'i_ritual'; if (has('counter', 'contra')) return 'i_counter';
     return null;
   }
   if (has('star', 'level', 'nivel', 'estrella')) return has('rank', 'rango', 'xyz') ? 's_rank' : 's_level';
@@ -2518,8 +2643,9 @@ async function loadTplFiles(list) {
       let w = 0;
       if (/^image\//.test(blob.type) || /\.(png|jpe?g|webp|gif)$/i.test(name)) { const im = await tryLoad(URL.createObjectURL(blob), false); w = Math.max(im.naturalWidth, im.naturalHeight); }
       const slot = guessSlot(name, w);
-      if (!slot) { skipped.push(name); continue; }
+      if (!slot) { if (!/matrix.*caps\s*2/i.test(name)) skipped.push(name); continue; }
       await setSlot(slot, blob, name); ok++;
+      if (slot.startsWith('f_')) { const lay = /japon|antig|ocg|kougeki|攻/i.test(norm(name)) ? 'ocg1' : 'tcg'; if (((state.tplLay || {})[slot] || 'tcg') !== lay) state.tplLay = Object.assign({}, state.tplLay, { [slot]: lay }); }
     } catch (e) { skipped.push(name); }
   }
   renderTplUI(); render();
@@ -2542,7 +2668,14 @@ function renderTplUI() {
     const pick = document.createElement('label'); pick.className = 'btn mini'; pick.htmlFor = id; pick.textContent = 'Elegir';
     row.append(pick, inp);
     if (has) { const x = document.createElement('button'); x.type = 'button'; x.className = 'mini'; x.textContent = 'Quitar'; x.addEventListener('click', () => clearSlot(slot)); row.append(x); }
-    d.append(th, lb, fn, row); grid.append(d);
+    if (slot.startsWith('f_')) {
+      const sel = document.createElement('select'); sel.id = 'tl_' + slot; sel.setAttribute('aria-label', 'Diseño de ' + label);
+      sel.innerHTML = '<option value="tcg">Diseño: Moderno (TCG)</option><option value="ocg1">Diseño: Japonés antiguo (攻/守)</option>';
+      sel.value = (state.tplLay || {})[slot] || 'tcg'; sel.style.fontSize = '.72rem'; sel.style.padding = '4px 6px';
+      sel.addEventListener('change', e => update({ tplLay: Object.assign({}, state.tplLay, { [slot]: e.target.value }) }));
+      d.append(th, lb, fn, sel, row);
+    } else d.append(th, lb, fn, row);
+    grid.append(d);
   });
   $('tplBadge').textContent = n ? n + ' cargado(s)' : 'ninguno';
   $('tplBadge').className = 'badge' + (n ? ' live' : '');
@@ -2550,20 +2683,27 @@ function renderTplUI() {
 $('tplFiles').addEventListener('change', e => { const fs = [...e.target.files]; e.target.value = ''; loadTplFiles(fs.map(f => ({ blob: f, name: f.name }))); });
 $('tplDir').addEventListener('change', e => { const fs = [...e.target.files]; e.target.value = ''; loadTplFiles(fs.map(f => ({ blob: f, name: f.name }))); });
 $('tplClear').addEventListener('click', async () => { for (const [slot] of TPL_SLOTS) if (TPL.names[slot]) await clearSlot(slot); tplNote('Plantillas quitadas: la carta vuelve a dibujarse con código.'); });
-$('tplGit').addEventListener('click', async () => {
-  const cfg = ghCfg(); tplNote(`Buscando la carpeta plantillas/ en ${cfg.repo}…`);
+// plantillas/ folder in the repo: loaded automatically; re-downloaded only when its files change
+async function tplSync(force) {
+  const cfg = ghCfg();
+  if (force) tplNote(`Buscando la carpeta plantillas/ en ${cfg.repo}…`);
   try {
     const headers = { Accept: 'application/vnd.github+json' }; if (ghTok) headers.Authorization = 'Bearer ' + ghTok;
     const r = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/plantillas?ref=${encodeURIComponent(cfg.branch)}`, { headers, cache: 'no-store' });
-    if (r.status === 404) { tplNote(`No existe la carpeta plantillas/ en ${cfg.repo} (rama ${cfg.branch}). Créala y sube ahí tus imágenes y fuentes.`, true); return; }
+    if (r.status === 404) { if (force) tplNote(`No existe la carpeta plantillas/ en ${cfg.repo} (rama ${cfg.branch}). Créala y sube ahí tus imágenes y fuentes.`, true); return; }
     if (!r.ok) throw new Error('GitHub respondió ' + r.status);
-    const items = (await r.json()).filter(i => i.type === 'file' && i.download_url);
-    tplNote(`Descargando ${items.length} archivo(s)…`);
+    const items = (await r.json()).filter(i => i.type === 'file' && i.download_url && /\.(png|jpe?g|webp|gif|ttf|otf|woff2?)$/i.test(i.name));
+    const sig = items.map(i => i.name + ':' + i.sha).sort().join('|');
+    let old = ''; try { old = localStorage.getItem('mcm-tpl-sig') || ''; } catch (e) {}
+    if (!force && sig === old) return;
+    tplNote(`Descargando ${items.length} archivo(s) de plantillas/…`);
     const list = [];
     for (const it of items) { const b = await (await fetch(it.download_url, { cache: 'no-store' })).blob(); list.push({ blob: b, name: it.name }); }
     await loadTplFiles(list);
-  } catch (e) { tplNote('No se pudo conectar con GitHub desde aquí. Si estás dentro de Claude, abre el archivo HTML en tu navegador o sube los archivos con «Subir carpeta».', true); }
-});
+    try { localStorage.setItem('mcm-tpl-sig', sig); } catch (e) {}
+  } catch (e) { if (force) tplNote('No se pudo conectar con GitHub desde aquí. Si estás dentro de Claude, abre el archivo HTML en tu navegador o sube los archivos con «Subir carpeta».', true); }
+}
+$('tplGit').addEventListener('click', () => tplSync(true));
 $('tplBleed').addEventListener('change', e => update({ tplBleed: e.target.checked }));
 [['tplAx', 'tplAx'], ['tplAy', 'tplAy'], ['tplAs', 'tplAs']].forEach(([id, k]) => $(id).addEventListener('input', e => update({ [k]: +e.target.value })));
 function tplFrame(fr, pend) {
@@ -2573,6 +2713,7 @@ function tplFrame(fr, pend) {
 (async () => {
   try { for (const [slot, v] of await idbAll()) { if (v && v.blob) { try { await setSlot(slot, v.blob, v.name, false); } catch (e) {} } } } catch (e) {}
   renderTplUI(); render();
+  setTimeout(() => tplSync(false), 1500);
 })();
 
 /* ---------- boot ---------- */
