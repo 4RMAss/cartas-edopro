@@ -2,94 +2,117 @@
 --The Winged Dragon of Ra (Anime Forms)
 --Script: 4RMAss · Anime Server by 4RMAss
 --Basado en el script oficial de Project Ignis (EDOPro) "The Winged Dragon of Ra (Anime)" (c511600400), con licencia AGPL-3.0.
---Tiene exactamente los efectos del Ra anime del juego (se cargan desde c511600400.lua) y además:
---  • Al resolver "Point-to-Point Transfer" cambia a la imagen 600000240.
---  • Al resolver "Immortal Phoenix" cambia a la imagen 600000241.
+--Tiene exactamente los efectos del Ra anime del juego (se cargan desde c511600400.lua) y además tres formas:
+--  • Forma 1 (600000240, esfera): al invocarlo por tributo. Desde ella se puede activar un efecto para pasar a la forma 2.
+--  • Forma 2 (600000239, la del juego base): la forma principal.
+--  • Forma 3 (600000241, fénix): al resolver "Point-to-Point Transfer" o "Immortal Phoenix".
+--  • Si no lo invocó su dueño o no lo controla su dueño, se queda en la forma 1 y no puede usar
+--    el cambio de forma, "Point-to-Point Transfer" ni "Immortal Phoenix".
 --  • Sigue siendo "The Winged Dragon of Ra" para las reglas (alias 10000010) durante todo el duelo.
---  • Vuelve a su imagen original al dejar el campo (al GY, mano, Deck o destierro solo va la original),
---    al terminar el turno (cuando esos efectos expiran) y si "De-Fusion" le quita los efectos.
+--  • Vuelve a la forma 2 al dejar el campo, al terminar el turno (desde la forma 3) y si "De-Fusion" le quita los efectos.
 Duel.LoadCardScript("c511600400.lua")
 local s,id=GetID()
 local BASE=511600400
-local FORM_PTP=id+1     --600000240: imagen de Point-to-Point Transfer
-local FORM_PHOENIX=id+2 --600000241: imagen de Immortal Phoenix
+local FORM_SPHERE=id+1  --600000240: forma esfera
+local FORM_PHOENIX=id+2 --600000241: forma fénix (Point-to-Point Transfer / Immortal Phoenix)
 local RA_ALIAS=10000010 --"The Winged Dragon of Ra"
---Pon esto en false si quieres que la forma se mantenga hasta que deje el campo, aunque pase el turno.
-s.revert_at_end_phase=true
 
 function s.initial_effect(c)
 	--Todos los efectos del Ra anime del juego
 	c511600400.initial_effect(c)
-	--Cambiar de imagen al resolver Point-to-Point Transfer / Immortal Phoenix
+	--"Point-to-Point Transfer" e "Immortal Phoenix": solo si lo invocó y lo controla su dueño
+	for _,eff in ipairs({c:GetOwnEffects()}) do
+		local d=eff:GetDescription()
+		if d==aux.Stringid(BASE,0) or d==aux.Stringid(BASE,1) then
+			local con=eff:GetCondition()
+			eff:SetCondition(function(e,...) return s.legit(e:GetHandler()) and (not con or con(e,...)) end)
+		end
+	end
+	--Invocación por tributo: forma esfera
 	local e1=Effect.CreateEffect(c)
-	e1:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
-	e1:SetCode(EVENT_CHAIN_SOLVED)
-	e1:SetRange(LOCATION_MZONE)
+	e1:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_CONTINUOUS)
+	e1:SetCode(EVENT_SUMMON_SUCCESS)
 	e1:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
-	e1:SetCondition(s.formcon)
-	e1:SetOperation(s.formop)
+	e1:SetOperation(function(e) s.setform(e:GetHandler(),FORM_SPHERE) end)
 	c:RegisterEffect(e1)
-	--Volver a la imagen original al dejar el campo
-	local e2=Effect.CreateEffect(c)
-	e2:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_CONTINUOUS)
-	e2:SetCode(EVENT_LEAVE_FIELD_P)
-	e2:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
-	e2:SetCondition(s.transformed)
-	e2:SetOperation(s.revertop)
+	--Invocación especial que no hizo su dueño: forma esfera
+	local e2=e1:Clone()
+	e2:SetCode(EVENT_SPSUMMON_SUCCESS)
+	e2:SetCondition(function(e) return not s.legit(e:GetHandler()) end)
 	c:RegisterEffect(e2)
-	--Volver a la imagen original en la End Phase (los efectos de la forma expiran)
+	--Pasar de la forma esfera a la forma principal
 	local e3=Effect.CreateEffect(c)
-	e3:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
-	e3:SetCode(EVENT_PHASE+PHASE_END)
+	e3:SetDescription(aux.Stringid(id,4))
+	e3:SetType(EFFECT_TYPE_IGNITION)
 	e3:SetRange(LOCATION_MZONE)
 	e3:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
-	e3:SetCondition(function(e) return s.revert_at_end_phase and s.transformed(e) end)
-	e3:SetOperation(s.revertop)
+	e3:SetCondition(function(e) local c=e:GetHandler() return c:GetOriginalCode()==FORM_SPHERE and s.legit(c) end)
+	e3:SetOperation(function(e)
+		local c=e:GetHandler()
+		if c:IsRelateToEffect(e) and c:IsFaceup() and c:GetOriginalCode()==FORM_SPHERE then s.revert(c) end
+	end)
 	c:RegisterEffect(e3)
-	--Volver a la imagen original si "De-Fusion" le quita los efectos de Point-to-Point Transfer
+	--Forma fénix al resolver "Point-to-Point Transfer" o "Immortal Phoenix"
 	local e4=Effect.CreateEffect(c)
 	e4:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
-	e4:SetCode(EVENT_ADJUST)
+	e4:SetCode(EVENT_CHAIN_SOLVED)
 	e4:SetRange(LOCATION_MZONE)
 	e4:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
-	e4:SetCondition(s.defusedcon)
-	e4:SetOperation(s.revertop)
+	e4:SetCondition(s.phoenixcon)
+	e4:SetOperation(function(e) s.setform(e:GetHandler(),FORM_PHOENIX) end)
 	c:RegisterEffect(e4)
+	--Volver a la forma principal al dejar el campo
+	local e5=Effect.CreateEffect(c)
+	e5:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_CONTINUOUS)
+	e5:SetCode(EVENT_LEAVE_FIELD_P)
+	e5:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
+	e5:SetCondition(function(e) local code=e:GetHandler():GetOriginalCode() return code==FORM_SPHERE or code==FORM_PHOENIX end)
+	e5:SetOperation(function(e) s.revert(e:GetHandler()) end)
+	c:RegisterEffect(e5)
+	--Volver a la forma principal en la End Phase (los efectos de la forma fénix expiran)
+	local e6=Effect.CreateEffect(c)
+	e6:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
+	e6:SetCode(EVENT_PHASE+PHASE_END)
+	e6:SetRange(LOCATION_MZONE)
+	e6:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
+	e6:SetCondition(function(e) return e:GetHandler():GetOriginalCode()==FORM_PHOENIX end)
+	e6:SetOperation(function(e) s.revert(e:GetHandler()) end)
+	c:RegisterEffect(e6)
+	--Volver a la forma principal si "De-Fusion" le quita los efectos de Point-to-Point Transfer
+	local e7=Effect.CreateEffect(c)
+	e7:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
+	e7:SetCode(EVENT_ADJUST)
+	e7:SetRange(LOCATION_MZONE)
+	e7:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
+	e7:SetCondition(function(e)
+		local c=e:GetHandler()
+		return c:GetOriginalCode()==FORM_PHOENIX and FLAG_RA_DEFUSION and c:HasFlagEffect(FLAG_RA_DEFUSION)
+	end)
+	e7:SetOperation(function(e) s.revert(e:GetHandler()) end)
+	c:RegisterEffect(e7)
 end
 s.listed_names={RA_ALIAS,BASE}
 
---¿Qué efecto del Ra acaba de resolverse?
-function s.formof(re)
-	if not re then return nil end
+--¿Lo invocó su dueño y lo controla su dueño?
+function s.legit(c)
+	local p=c:GetOwner()
+	return c:IsControler(p) and c:GetSummonPlayer()==p
+end
+function s.phoenixcon(e,tp,eg,ep,ev,re,r,rp)
+	local c=e:GetHandler()
+	if not (re and re:GetHandler()==c and c:IsFaceup()) then return false end
 	local d=re:GetDescription()
-	if d==aux.Stringid(BASE,0) then return FORM_PTP end
-	if d==aux.Stringid(BASE,1) then return FORM_PHOENIX end
-	return nil
+	return d==aux.Stringid(BASE,0) or d==aux.Stringid(BASE,1)
 end
-function s.formcon(e,tp,eg,ep,ev,re,r,rp)
-	local c=e:GetHandler()
-	return re and re:GetHandler()==c and c:IsFaceup() and s.formof(re)~=nil
-end
-function s.formop(e,tp,eg,ep,ev,re,r,rp)
-	local c=e:GetHandler()
-	local form=s.formof(re)
-	if not form or c:GetOriginalCode()==form then return end
-	--Cambia la imagen (código de datos) pero conserva el nombre y la identidad: "The Winged Dragon of Ra"
+--Cambia la imagen (código de datos) pero conserva el nombre y la identidad: "The Winged Dragon of Ra"
+function s.setform(c,form)
+	if c:GetOriginalCode()==form then return end
 	c:Recreate(form,RA_ALIAS)
 	Duel.AdjustInstantly(c)
 end
-function s.transformed(e)
-	local code=e:GetHandler():GetOriginalCode()
-	return code==FORM_PTP or code==FORM_PHOENIX
-end
-function s.defusedcon(e)
-	local c=e:GetHandler()
-	return c:GetOriginalCode()==FORM_PTP and FLAG_RA_DEFUSION and c:HasFlagEffect(FLAG_RA_DEFUSION)
-end
-function s.revertop(e,tp,eg,ep,ev,re,r,rp)
-	local c=e:GetHandler()
-	if not s.transformed(e) then return end
-	--Vuelve a los datos e imagen originales de esta carta (incluye su alias original)
+--Vuelve a los datos e imagen de la forma principal (incluye su alias original)
+function s.revert(c)
+	if c:GetOriginalCode()==id then return end
 	c:Recreate(id)
 	Duel.AdjustInstantly(c)
 end
