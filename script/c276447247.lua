@@ -173,7 +173,7 @@ function s.cptg(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
 	if tg then tg(e,tp,ceg,cep,cev,cre,cr,crp,1) end
 	te:SetLabelObject(e:GetLabelObject())
 	e:SetLabelObject(te)
-	Duel.ClearOperationInfo(0)
+	--The operation info of the copied Spell is kept: some Spells (e.g. "Mystic Box") read it when they resolve
 end
 function s.cpop(e,tp,eg,ep,ev,re,r,rp)
 	if e:GetLabel()==1 then
