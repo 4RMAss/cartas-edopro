@@ -8,12 +8,13 @@ function s.initial_effect(c)
 	Xyz.AddProcedure(c,aux.FilterBoolFunctionEx(Card.IsSetCard,SET_BATTLIN_BOXER),4,2)
 	c:EnableReviveLimit()
 	--destroy replace
+	--Anime: only this card is protected
 	local e1=Effect.CreateEffect(c)
-	e1:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
+	e1:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_CONTINUOUS)
+	e1:SetProperty(EFFECT_FLAG_SINGLE_RANGE)
 	e1:SetCode(EFFECT_DESTROY_REPLACE)
 	e1:SetRange(LOCATION_MZONE)
 	e1:SetTarget(s.reptg)
-	e1:SetValue(s.repval)
 	c:RegisterEffect(e1)
 	--attack up
 	local e2=Effect.CreateEffect(c)
@@ -31,22 +32,13 @@ function s.repfilter(c,tp)
 		and not c:IsReason(REASON_REPLACE)
 end
 function s.reptg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return eg:IsExists(s.repfilter,1,nil,tp) end
-	if e:GetHandler():CheckRemoveOverlayCard(tp,1,REASON_EFFECT) and Duel.SelectEffectYesNo(tp,e:GetHandler(),96) then
-		e:GetHandler():RemoveOverlayCard(tp,1,1,REASON_EFFECT)
-		local g=eg:Filter(s.repfilter,nil,tp)
-		if #g==1 then
-			e:SetLabelObject(g:GetFirst())
-		else
-			Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_DESREPLACE)
-			local cg=g:Select(tp,1,1,nil)
-			e:SetLabelObject(cg:GetFirst())
-		end
+	local c=e:GetHandler()
+	if chk==0 then return c:IsReason(REASON_BATTLE|REASON_EFFECT) and not c:IsReason(REASON_REPLACE)
+		and c:CheckRemoveOverlayCard(tp,1,REASON_EFFECT) end
+	if Duel.SelectEffectYesNo(tp,c,96) then
+		c:RemoveOverlayCard(tp,1,1,REASON_EFFECT)
 		return true
 	else return false end
-end
-function s.repval(e,c)
-	return c==e:GetLabelObject()
 end
 function s.atktg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return e:GetHandler():IsRelateToEffect(e) end

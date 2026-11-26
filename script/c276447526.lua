@@ -2,7 +2,7 @@
 --Script: 4RMAss · Anime Server by 4RMAss
 --Basado en los scripts oficiales de Project Ignis (EDOPro), con licencia AGPL-3.0.
 local s,id=GetID()
-local TOKEN_SURPRISE=id+1
+local TOKEN_SURPRISE=35167376 --"Surprise Token"
 function s.initial_effect(c)
 	--Make 1 face-up monster you control become the declared Type and Attribute, then you can Fusion Summon 1 Fusion Monster from your Extra Deck, using monsters you control, including the targeted monster
 	local e1=Effect.CreateEffect(c)
