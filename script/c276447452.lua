@@ -11,9 +11,14 @@ function s.initial_effect(c)
 	e1:SetOperation(s.activate)
 	c:RegisterEffect(e1)
 end
-local STATS={EFFECT_UPDATE_ATTACK,EFFECT_SET_ATTACK,EFFECT_SET_ATTACK_FINAL,EFFECT_SET_BASE_ATTACK,EFFECT_SET_BASE_ATTACK_FINAL,
-	EFFECT_UPDATE_DEFENSE,EFFECT_SET_DEFENSE,EFFECT_SET_DEFENSE_FINAL,EFFECT_SET_BASE_DEFENSE,EFFECT_SET_BASE_DEFENSE_FINAL,
+local STATS={EFFECT_UPDATE_ATTACK,EFFECT_SET_ATTACK,EFFECT_SET_ATTACK_FINAL,EFFECT_SET_BASE_ATTACK,
+	EFFECT_UPDATE_DEFENSE,EFFECT_SET_DEFENSE,EFFECT_SET_DEFENSE_FINAL,EFFECT_SET_BASE_DEFENSE,
 	EFFECT_SWAP_AD,EFFECT_SWAP_BASE_AD}
+--1: change by an amount, 2: set the current value, 3: set the original value
+local KIND={[EFFECT_UPDATE_ATTACK]={1,true},[EFFECT_SET_ATTACK]={2,true},[EFFECT_SET_ATTACK_FINAL]={2,true},
+	[EFFECT_SET_BASE_ATTACK]={3,true},
+	[EFFECT_UPDATE_DEFENSE]={1,false},[EFFECT_SET_DEFENSE]={2,false},[EFFECT_SET_DEFENSE_FINAL]={2,false},
+	[EFFECT_SET_BASE_DEFENSE]={3,false}}
 function s.stateffs(tc)
 	local t={}
 	for _,code in ipairs(STATS) do
@@ -37,42 +42,91 @@ function s.target(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return true end
 	Duel.SetPossibleOperationInfo(0,CATEGORY_RECOVER,nil,0,tp,0)
 end
+--How much the ATK/DEF of a monster you control would change with this effect (nil = unknown)
+function s.amount(tc,ef,tp)
+	local code=ef:GetCode()
+	if code==EFFECT_SWAP_AD or code==EFFECT_SWAP_BASE_AD then return 2*math.abs(tc:GetAttack()-tc:GetDefense()) end
+	local k=KIND[code]
+	if not k then return nil end
+	local v=ef:GetValue()
+	if type(v)=='function' then
+		local ok,res=pcall(v,ef,tc)
+		if not ok or type(res)~='number' then return nil end
+		v=res
+	end
+	if type(v)~='number' then return nil end
+	local cur=k[2] and tc:GetAttack() or tc:GetDefense()
+	if k[1]==1 then return v<0 and math.min(-v,cur) or v end
+	if k[1]==2 then return math.abs(v-cur) end
+	return math.abs(v-(k[2] and tc:GetBaseAttack() or tc:GetBaseDefense()))
+end
 function s.activate(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
-	local ch,snap=ev,{}
-	--Right before the opponent's effect resolves: remember the stats of your monsters
+	local ch,st=ev,{gain=0,snap={}}
+	local function unpatch()
+		if st.orig then Card.RegisterEffect=st.orig st.orig=nil end
+	end
+	--While the opponent's effect resolves, the ATK/DEF changes it would apply to your monsters are not applied:
+	--you gain that much LP instead
 	local e1=Effect.CreateEffect(c)
 	e1:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
 	e1:SetCode(EVENT_CHAIN_SOLVING)
 	e1:SetOperation(function(_,_,_,_,cev)
-		if cev~=ch then return end
+		if cev~=ch or st.orig then return end
 		for tc in Duel.GetMatchingGroup(Card.IsFaceup,tp,LOCATION_MZONE,0,nil):Iter() do
-			snap[tc]={tc:GetAttack(),tc:GetDefense(),s.stateffs(tc)}
+			st.snap[tc]={tc:GetAttack(),tc:GetDefense(),s.stateffs(tc)}
+		end
+		local orig=Card.RegisterEffect
+		st.orig=orig
+		Card.RegisterEffect=function(tc,ef,...)
+			if tc and ef and s.myface(tc,tp) and KIND[ef:GetCode()] or (ef and (ef:GetCode()==EFFECT_SWAP_AD or ef:GetCode()==EFFECT_SWAP_BASE_AD) and tc and s.myface(tc,tp)) then
+				if ef:GetOwnerPlayer()==1-tp then
+					local d=s.amount(tc,ef,tp)
+					if d then st.gain=st.gain+d return end
+				end
+			end
+			return orig(tc,ef,...)
 		end
 	end)
 	e1:SetReset(RESET_CHAIN)
 	Duel.RegisterEffect(e1,tp)
-	--After it resolves: undo the change and gain that much LP instead
+	--After it resolves: undo any other change it made to your monsters, then gain the LP
 	local e2=e1:Clone()
 	e2:SetCode(EVENT_CHAIN_SOLVED)
 	e2:SetOperation(function(_,_,_,_,cev)
 		if cev~=ch then return end
-		local gain=0
-		for tc,v in pairs(snap) do
+		unpatch()
+		for tc,v in pairs(st.snap) do
 			if s.myface(tc,tp) then
-				local d=math.abs(tc:GetAttack()-v[1])+math.abs(tc:GetDefense()-v[2])
-				if d>0 then
-					for ef in pairs(s.stateffs(tc)) do
-						if not v[3][ef] then ef:Reset() end
+				local a0,d0,found=tc:GetAttack(),tc:GetDefense(),false
+				for ef in pairs(s.stateffs(tc)) do
+					if not v[3][ef] and ef:GetOwnerPlayer()==1-tp then
+						found=true
+						if ef:IsHasType(EFFECT_TYPE_SINGLE) then
+							ef:Reset()
+						else
+							local im=Effect.CreateEffect(c)
+							im:SetType(EFFECT_TYPE_SINGLE)
+							im:SetProperty(EFFECT_FLAG_CANNOT_DISABLE)
+							im:SetCode(EFFECT_IMMUNE_EFFECT)
+							im:SetValue(function(_,te) return te==ef end)
+							im:SetReset(RESET_EVENT|RESETS_STANDARD)
+							tc:RegisterEffect(im)
+						end
 					end
-					gain=gain+d
 				end
+				if found then st.gain=st.gain+math.abs(a0-tc:GetAttack())+math.abs(d0-tc:GetDefense()) end
 			end
 		end
-		if gain>0 then
+		if st.gain>0 then
 			Duel.Hint(HINT_CARD,0,id)
-			Duel.Recover(tp,gain,REASON_EFFECT)
+			Duel.Recover(tp,st.gain,REASON_EFFECT)
 		end
 	end)
 	Duel.RegisterEffect(e2,tp)
+	--Safety: never leave the patch on after the chain
+	local e3=e1:Clone()
+	e3:SetCode(EVENT_CHAIN_END)
+	e3:SetOperation(function() unpatch() end)
+	Duel.RegisterEffect(e3,tp)
 end
