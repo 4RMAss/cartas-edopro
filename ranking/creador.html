@@ -955,9 +955,10 @@ function ocgNormalize(T) {
   const out = document.createElement('canvas'); out.width = 694; out.height = 1013; const o = out.getContext('2d');
   o.drawImage(T, ox, oy, 694 * sx, 1013 * sy, 0, 0, 694, 1013);
   o.clearRect(101, 235, 492, 543);
-  const lab = o.getImageData(478, 848, 40, 40).data; let dark = 0;
-  for (let i = 0; i < lab.length; i += 4) if (lab[i + 3] > 128 && lab[i] + lab[i + 1] + lab[i + 2] < 240) dark++;
-  const res = { img: out, hole: true, labels: dark > 25 };
+  // which bottom layout? the orange text-box frame ends at x≈446 (攻/守 printed) or x≈323 (wide stats box, no labels)
+  const orange = (x, y, w2, h2) => { const q = o.getImageData(x, y, w2, h2).data; let n = 0; for (let i = 0; i < q.length; i += 4) if (q[i] > 140 && q[i + 1] < 130 && q[i + 2] < 100 && q[i] - q[i + 2] > 70) n++; return n; };
+  const fmtA = orange(440, 850, 12, 90) >= orange(317, 850, 12, 90);
+  const res = { img: out, hole: true, labels: fmtA };
   NORM.set(T, res); return res;
 }
 function drawOcg1(ctx, S, opts, T0, fr) {
@@ -1000,18 +1001,22 @@ function drawOcg1(ctx, S, opts, T0, fr) {
   }
   // effect text in the small box
   const text = state.desc.trim();
-  if (text) paragraph(ctx, text, { x: 118, y: 1222, w: 494, h: 134 }, { size: TPL.font.body ? 27 : 28, min: 10, k: K_BODY, italic: fr === 'normal' && !TPL.font.italic, fam: fr === 'normal' ? F_ITALIC : F_BODY, weight: 600, color: '#111' });
+  // format A (攻/守 printed, small text box) vs format B (no labels, narrower text box + wide stats box)
+  const fB = !N.labels;
+  if (text) paragraph(ctx, text, fB ? { x: 134, y: 1222, w: 310, h: 134 } : { x: 118, y: 1222, w: 494, h: 134 }, { size: TPL.font.body ? 27 : 28, min: 10, k: K_BODY, italic: fr === 'normal' && !TPL.font.italic, fam: fr === 'normal' ? F_ITALIC : F_BODY, weight: 600, color: '#111' });
   // ATK / DEF next to 攻 / 守 (labels drawn when the template doesn't print them)
   ctx.fillStyle = '#111';
   if (!N.labels) {
     ctx.textAlign = 'center';
-    ctx.font = '900 48px "Noto Serif JP", serif'; ctx.fillText('攻', 716, 1268); ctx.fillText('守', 716, 1343);
-    ctx.font = '900 17px "Noto Serif JP", serif'; ctx.fillText('こう', 716, 1213); ctx.fillText('しゅ', 716, 1288);
+    const lx = fB ? 560 : 716;
+    ctx.font = '900 48px "Noto Serif JP", serif'; ctx.fillText('攻', lx, 1268); ctx.fillText('守', lx, 1343);
+    ctx.font = '900 17px "Noto Serif JP", serif'; ctx.fillText('こう', lx, 1213); ctx.fillText('しゅ', lx, 1288);
     ctx.textAlign = 'left';
   }
   const nf = TPL.font.small ? `400 46px ${F_NUM}` : `700 46px ${F_NUM}`;
-  txt(ctx, String(state.atk || '0'), 906, 1274, nf, .95, 'right', 150);
-  txt(ctx, fr === 'link' ? 'LINK-' + linkCount() : String(state.def || '0'), 906, 1349, nf, .95, 'right', 150);
+  const vx = fB ? 858 : 906, vw = fB ? 230 : 150;
+  txt(ctx, String(state.atk || '0'), vx, 1274, nf, .95, 'right', vw);
+  txt(ctx, fr === 'link' ? 'LINK-' + linkCount() : String(state.def || '0'), vx, 1349, nf, .95, 'right', vw);
   // passcode (bottom-left, the template's own copyright stays on the right)
   if (state.showPass && state.cardId) { ctx.fillStyle = '#111'; txt(ctx, state.cardId, 60, 1406, `${TPL.font.serial ? '400 26px' : '500 28px'} ${F_SMALL}`, .95); }
 }
